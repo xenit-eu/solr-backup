@@ -1,0 +1,45 @@
+plugins {
+    id 'java-library'
+}
+
+description = "Xenit backup"
+group = 'eu.xenit.solr-backup'
+
+ext {
+    solrVersion = '6.6.5'
+    assVersion = '2.0.0'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    withJavadocJar()
+    withSourcesJar()
+}
+
+configurations {
+    sharedJar
+}
+
+dependencies {
+    // compile against solr6 libraries
+    compileOnly("org.apache.solr:solr-core:${solrVersion}") {
+        exclude group: 'org.restlet.jee' // Only available in JCenter, not essential in this project.
+    }
+    compileOnly "org.alfresco:alfresco-search:${assVersion}"
+
+    implementation platform('com.amazonaws:aws-java-sdk-bom:1.12.32')
+
+    implementation ('com.amazonaws:aws-java-sdk-core:1.12.32')
+    implementation ('com.amazonaws:aws-java-sdk-s3:1.12.32')
+}
+
+artifacts.add('sharedJar', jar)
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+}
