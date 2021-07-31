@@ -1,0 +1,51 @@
+version: '3'
+
+services:
+ alfresco:
+    image: ${ALFRESCO_IMAGE}
+    restart: unless-stopped
+    ports:
+    - 8080
+    environment:
+    - INDEX
+    - SOLR_SSL=none
+    - GLOBAL_local.transform.service.enabled=false
+    - JAVA_XMX=2048M
+
+ postgresql:
+   image: docker.io/xenit/postgres
+   environment:
+   - POSTGRES_USER=alfresco
+   - POSTGRES_PASSWORD=admin
+   - POSTGRES_DB=alfresco
+   restart: unless-stopped
+
+ share:
+   image: docker.io/xenit/alfresco-share-community:6.1
+   ports:
+     - 8080
+
+ solr:
+    image: ${DOCKER_IMAGE}
+    restart: unless-stopped
+    hostname: solr
+    ports:
+    - 8080:8080
+    volumes:
+    - ./solr-s3.xml:/opt/alfresco-search-services/solrhome/solr.xml
+    environment:
+    - ALFRESCO_SSL=none
+    - JAVA_XMX=1024M
+    - JAVA_OPTS_S3_BLOB=-DBLOB_S3_MOCK=true
+    - JAVA_OPTS_S3_BUCKET_NAME=-DBLOB_S3_BUCKET_NAME=TEST_BUCKET
+    - JAVA_OPTS_S3_ENDPOINT=-DBLOB_S3_ENDPOINT=http://s3mock:9090
+
+ s3mock:
+    image: adobe/s3mock
+    restart: unless-stopped
+    hostname: s3mock
+    ports:
+    - 9090
+    environment:
+    - initialBuckets=TEST_BUCKET
+    - root=/data
