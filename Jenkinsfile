@@ -31,9 +31,6 @@ pipeline {
     post {
         always {
             sh "./gradlew composeDownForced"
-            script {
-                junit '**/build/**/TEST-*.xml'
-            }
         }
     }
 }
