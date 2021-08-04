@@ -61,7 +61,7 @@ public class S3StorageClient {
 
     private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    protected static final String BLOB_FILE_PATH_DELIMITER = "/";
+    public static final String BLOB_FILE_PATH_DELIMITER = "/";
 
     // S3 has a hard limit of 1000 keys per batch delete request
     protected static final int MAX_KEYS_PER_BATCH_DELETE = 1000;
@@ -90,7 +90,7 @@ public class S3StorageClient {
         this.bucketName = bucketName;
     }
 
-    public static AmazonS3 createInternalClient(String region, String proxyHost, int proxyPort, String endpoint) {
+    protected static AmazonS3 createInternalClient(String region, String proxyHost, int proxyPort, String endpoint) {
         ClientConfiguration clientConfig = new ClientConfiguration()
             .withProtocol(Protocol.HTTPS);
 
@@ -169,7 +169,7 @@ public class S3StorageClient {
      *
      * @param path Path to directory in S3.
      */
-    void deleteDirectory(String path) throws S3Exception {
+    public void deleteDirectory(String path) throws S3Exception {
         path = sanitizedPath(path, false);
 
         List<String> entries = new ArrayList<>();
@@ -187,7 +187,7 @@ public class S3StorageClient {
      * @param path Path to directory in S3.
      * @return Files and sub-directories in path.
      */
-    String[] listDir(String path) throws S3Exception {
+    protected String[] listDir(String path) throws S3Exception {
         path = sanitizedPath(path, false);
 
         String prefix = path.equals("/") ? path : path + BLOB_FILE_PATH_DELIMITER;
@@ -228,7 +228,7 @@ public class S3StorageClient {
      * @param path to File/Directory in S3.
      * @return true if path exists, otherwise false?
      */
-    boolean pathExists(String path) throws S3Exception {
+    public boolean pathExists(String path) throws S3Exception {
         path = sanitizedPath(path, false);
 
         // for root return true
@@ -268,7 +268,7 @@ public class S3StorageClient {
      * @param path to file in S3.
      * @return length of file.
      */
-    long length(String path) throws S3Exception {
+    public long length(String path) throws S3Exception {
         path = sanitizedPath(path, true);
         try {
             ObjectMetadata objectMetadata = s3Client.getObjectMetadata(bucketName, path);
@@ -289,7 +289,7 @@ public class S3StorageClient {
      * @param path to file in S3.
      * @return InputStream for file.
      */
-    InputStream pullStream(String path) throws S3Exception {
+    public InputStream pullStream(String path) throws S3Exception {
         path = sanitizedPath(path, true);
 
         try {
@@ -307,7 +307,7 @@ public class S3StorageClient {
      * @param path to file in S3.
      * @return OutputStream for file.
      */
-    OutputStream pushStream(String path) throws S3Exception {
+    protected OutputStream pushStream(String path) throws S3Exception {
         path = sanitizedPath(path, true);
 
         if (!parentDirectoryExist(path)) {
@@ -324,7 +324,7 @@ public class S3StorageClient {
     /**
      * Override {@link Closeable} since we throw no exception.
      */
-    void close() {
+    public void close() {
         s3Client.shutdown();
     }
 
@@ -347,7 +347,7 @@ public class S3StorageClient {
     /**
      *  Any blob file path that specifies a non-existent blob file will not be treated as an error.
      */
-    private Collection<String> deleteObjects(Collection<String> paths) throws S3Exception {
+    protected Collection<String> deleteObjects(Collection<String> paths) throws S3Exception {
         try {
             /*
              * Per the S3 docs:
@@ -444,7 +444,7 @@ public class S3StorageClient {
      * -If it's a file, throw an error if it ends with a trailing slash
      * -Else, silently trim the trailing slash
      */
-    String sanitizedPath(String path, boolean isFile) throws S3Exception {
+    protected String sanitizedPath(String path, boolean isFile) throws S3Exception {
         // Trim space from start and end
         String sanitizedPath = path.trim();
 
@@ -469,7 +469,7 @@ public class S3StorageClient {
      * Best effort to handle Amazon exceptions as checked exceptions. Amazon exception are all subclasses
      * of {@link RuntimeException} so some may still be uncaught and propagated.
      */
-    public static S3Exception handleAmazonException(AmazonClientException ace) {
+    protected static S3Exception handleAmazonException(AmazonClientException ace) {
 
         if (ace instanceof AmazonServiceException) {
             AmazonServiceException ase = (AmazonServiceException)ace;

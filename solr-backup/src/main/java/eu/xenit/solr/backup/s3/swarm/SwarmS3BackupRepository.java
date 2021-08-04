@@ -16,6 +16,8 @@
  */
 package eu.xenit.solr.backup.s3.swarm;
 
+import static eu.xenit.solr.backup.s3.S3StorageClient.BLOB_FILE_PATH_DELIMITER;
+
 import eu.xenit.solr.backup.s3.S3BackupRepository;
 import eu.xenit.solr.backup.s3.S3IndexInput;
 import java.io.IOException;
@@ -23,6 +25,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -75,11 +78,28 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
             throw new IllegalArgumentException("URI must being with 'swarm:' scheme");
         }
 
-        // If paths contains unnecessary '/' separators, they'll be removed by URI.normalize()
         String path = baseUri + "/" + String.join("/", pathComponents);
+        if (pathComponents.length == 1 && pathComponents[0].contains("/"))
+            path = SWARM_SCHEME + ":///" + pathComponents[0];
         return URI.create(path).normalize();
     }
 
+    @Override
+    public void createDirectory(URI path) throws IOException {
+    }
+
+    @Override
+    public void deleteDirectory(URI path) throws IOException {
+        Objects.requireNonNull(path, "cannot delete directory with a null URI");
+
+        String blobPath = getS3Path(path);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Delete directory '{}'", blobPath);
+        }
+
+        client.deleteDirectory(blobPath);
+    }
 
     @Override
     public boolean exists(URI path) throws IOException {
@@ -137,8 +157,15 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
         if (log.isDebugEnabled()) {
             log.debug("listAll for '{}'", blobPath);
         }
+        StackWalker walker = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+        StackWalker.StackFrame frame = walker.walk(stream1 -> stream1.skip(1)
+                .findFirst()
+                .orElse(null));
 
-        return client.listDir(blobPath);
+        if(frame.getMethodName().equals("deleteOldBackups"))
+            return client.listDir(blobPath);
+
+        return client.listFiles(blobPath);
     }
 
     @Override
@@ -149,15 +176,10 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
             log.debug("getPathType for '{}'", blobPath);
         }
 
+        if (!blobPath.contains(BLOB_FILE_PATH_DELIMITER))
+            return PathType.DIRECTORY;
+
         return PathType.FILE;
-    }
-
-    @Override
-    public void createDirectory(URI path) throws IOException {
-    }
-
-    @Override
-    public void deleteDirectory(URI path) throws IOException {
     }
 
     /**
@@ -248,6 +270,16 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
             log.info("Download from S3 '{}' finished in {}ms", blobPath, timeElapsed);
         }
     }
+
+    @Override
+    public void copyFileTo(URI sourceRepo, String fileName, Directory dest) throws IOException {
+        try {
+            copyIndexFileTo(new URI("swarm:///"), fileName, dest, fileName.substring(fileName.indexOf("/") + 1));
+        } catch (URISyntaxException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     @Override
     public void close() {

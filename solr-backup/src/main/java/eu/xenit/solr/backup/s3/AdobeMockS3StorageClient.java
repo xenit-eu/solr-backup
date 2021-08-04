@@ -60,7 +60,7 @@ class AdobeMockS3StorageClient extends S3StorageClient {
      * -If it's a file, throw an error if it ends with a trailing slash
      */
     @Override
-    String sanitizedPath(String path, boolean isFile) throws S3Exception {
+    protected String sanitizedPath(String path, boolean isFile) throws S3Exception {
         // Trim space from start and end
         String sanitizedPath = path.trim();
 
