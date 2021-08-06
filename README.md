@@ -10,6 +10,30 @@ New classes have been implemented for Caringo Swarm repository.
 
 ## Testing locally
 
+### Swarm
+
+Starting up solr with swarm repository (will need credentials + access to a real Swarm, replace relevant properties in docker-compose-swarm.yml):
+
+    ./gradlew integration-tests:solr6:cU
+
+Create a backup in the bucket test-solr-backup in swarm:
+
+    curl "http://localhost:8080/solr/alfresco/replication?command=backup&repository=swarm&location=swarm:///&name=test"
+
+Wait until backup is finished - look for property snapshotCompletedAt:
+
+    curl "http://localhost:8080/solr/alfresco/replication?command=details"
+
+Restore from the backup:
+
+    curl "http://localhost:8080/solr/alfresco/replication?command=restore&repository=swarm&location=swarm:///&name=test"
+
+Check that the restore has been successful:
+
+    curl "http://localhost:8080/solr/alfresco/replication?command=restorestatus"
+
+If the name of the backup is not given when backing up, it will be automatically created as a timestamp. In this case, an additional parameter can be added to the url, specifying how many snapshots are to be kept: <numberToKeep>. In the case of a restore, parameter name is mandatory.
+
 ### S3
 
 Starting up solr (using the mock from https://github.com/adobe/S3Mock):
@@ -20,7 +44,7 @@ Create a backup in the bucket TEST_BUCKET in S3:
 
     curl "http://localhost:8080/solr/alfresco/replication?command=backup&repository=s3&location=s3:/&name=test"
 
-Wait until backup is finished - look for property snapshotCompletedAt:
+Wait until backup is finished:
 
     curl "http://localhost:8080/solr/alfresco/replication?command=details"
 
@@ -32,24 +56,3 @@ Check that the restore has been successful:
 
     curl "http://localhost:8080/solr/alfresco/replication?command=restorestatus"
 
-### Swarm
-
-Starting up solr with swarm repository (will need credentials + access to a real Swarm, replace relevant properties in docker-compose-swarm.yml):
-
-    ./gradlew integration-tests:solr6:cU
-
-Create a backup in the bucket test-solr-backup in swarm:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=backup&repository=swarm&location=swarm:///&name=test"
-
-Wait until backup is finished - status can be seen via:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=details"
-
-Restore from the backup:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=restore&repository=swarm&location=swarm:///&name=test"
-
-Check that the restore has been successful:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=restorestatus"
