@@ -28,6 +28,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Objects;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.Directory;
@@ -162,10 +163,16 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
                 .findFirst()
                 .orElse(null));
 
-        if(frame.getMethodName().equals("deleteOldBackups"))
-            return client.listDir(blobPath);
+        String[] list;
+        if(frame.getMethodName().equals("deleteOldBackups")) {
+            list = client.listDir(blobPath);
+            log.info("Following backups exist: {} ", Arrays.toString(list));
+            return list;
+        }
 
-        return client.listFiles(blobPath);
+        list = client.listFiles(blobPath);
+        log.info("Following files are in {}: {} ", blobPath, list);
+        return list;
     }
 
     @Override

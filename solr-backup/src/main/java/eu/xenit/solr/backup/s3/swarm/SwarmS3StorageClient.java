@@ -119,6 +119,9 @@ class SwarmS3StorageClient extends S3StorageClient{
                         .collect(Collectors.toList());
 
                 for(String file : files) {
+                    // ignore file with successful snapshots
+                    if(!file.contains("/"))
+                        continue;
                     String dir = file.substring(0,file.indexOf("/"));
                     if(!dir.isEmpty() && !entries.contains(dir)) {
                         entries.add(dir);
