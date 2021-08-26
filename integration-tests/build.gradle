@@ -41,7 +41,7 @@ subprojects {
         integrationTestRuntime group: 'org.glassfish.jaxb', name: 'jaxb-runtime', version: '2.3.2'
 
 
-        backupJar project(path: ":solr-backup", configuration: "sharedJar")
+        backupJar project(path: ":solr-backup")
     }
 
     task integrationTest(type: Test, group: "verification") {
@@ -63,7 +63,7 @@ subprojects {
 
         if(flavor == "solr6") {
             smartCopy "${project.parent.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
-            smartCopy configurations.backupJar.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
+            smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
             smartCopy configurations.amazonSdkCore.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
             smartCopy configurations.amazonSdkS3.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
         } 
