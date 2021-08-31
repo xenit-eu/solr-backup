@@ -8,6 +8,16 @@ It has been packported to solr6, since this is the version used by Alfresco curr
 Caringo Swarm is a backend system which is compatible with the S3 protocol. However, Caringo Swarm does not have a hierarchical structure and therefore the code for the S3 repository cannot be fully used.  
 New classes have been implemented for Caringo Swarm repository.
 
+## Variables
+
+| Environment variable                    | Java system property                           | Comments                               |
+| --------------------------- | --------------------------------- | -------------------------------------- |
+|                             | -DBLOB_S3_ENDPOINT | Example in docker-compose: JAVA_OPTS_S3_ENDPOINT=-DBLOB_S3_ENDPOINT=http://backup.swarm-s3.service.hetzner-nbg.consul:8090. Needs to be set as a system property, so that it is substituted in solr.xml |
+|                             | -DBLOB_S3_BUCKET_NAME | Needs to be set as a system property, so that it is substituted in solr.xml |
+| AWS_ACCESS_KEY_ID | | Access key to access the S3 enpoint |
+| AWS_SECRET_KEY | | Secret key to access the S3 endpoint |
+
+
 ## Testing locally
 
 ### Swarm
