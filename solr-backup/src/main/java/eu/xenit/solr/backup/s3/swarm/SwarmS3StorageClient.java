@@ -105,6 +105,14 @@ class SwarmS3StorageClient extends S3StorageClient{
     @Override
     protected String[] listDir(String path) throws S3Exception {
         path = sanitizedPath(path, false);
+        if(path.isEmpty() || "/".equals(path))
+            return listVirtualDirs(path);
+        else
+            return listFiles(path);
+    }
+
+    protected String[] listVirtualDirs(String path) throws S3Exception {
+        path = sanitizedPath(path, false);
 
         ListObjectsRequest listRequest = new ListObjectsRequest()
                 .withBucketName(bucketName);

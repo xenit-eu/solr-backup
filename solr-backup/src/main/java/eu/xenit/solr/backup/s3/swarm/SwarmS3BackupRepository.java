@@ -28,7 +28,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Objects;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.Directory;
@@ -146,7 +145,8 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
     }
 
     /**
-     * This method returns all the entries (files and directories) in the specified directory.
+     * This method returns files starting with specified prefix(path)
+     * If the path is empty or the root folder, it returns virtual (sub)folders detected as the first part of the path of files starting with that prefix.
      *
      * @param path The directory path
      * @return an array of strings, one for each entry in the directory
@@ -158,21 +158,8 @@ public class SwarmS3BackupRepository extends S3BackupRepository {
         if (log.isDebugEnabled()) {
             log.debug("listAll for '{}'", blobPath);
         }
-        StackWalker walker = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
-        StackWalker.StackFrame frame = walker.walk(stream1 -> stream1.skip(1)
-                .findFirst()
-                .orElse(null));
 
-        String[] list;
-        if(frame.getMethodName().equals("deleteOldBackups")) {
-            list = client.listDir(blobPath);
-            log.info("Following backups exist: {} ", Arrays.toString(list));
-            return list;
-        }
-
-        list = client.listFiles(blobPath);
-        log.info("Following files are in {}: {} ", blobPath, list);
-        return list;
+        return client.listDir(blobPath);
     }
 
     @Override
