@@ -12,7 +12,7 @@ New classes have been implemented for Caringo Swarm repository.
 
 | Environment variable                    | Java system property                           | Comments                               |
 | --------------------------- | --------------------------------- | -------------------------------------- |
-|                             | -DBLOB_S3_ENDPOINT | Example in docker-compose: JAVA_OPTS_S3_ENDPOINT=-DBLOB_S3_ENDPOINT=http://backup.swarm-s3.service.hetzner-nbg.consul:8090. Needs to be set as a system property, so that it is substituted in solr.xml |
+|                             | -DBLOB_S3_ENDPOINT | Needs to be set as a system property, so that it is substituted in solr.xml |
 |                             | -DBLOB_S3_BUCKET_NAME | Needs to be set as a system property, so that it is substituted in solr.xml |
 | AWS_ACCESS_KEY_ID | | Access key to access the S3 enpoint |
 | AWS_SECRET_KEY | | Secret key to access the S3 endpoint |
