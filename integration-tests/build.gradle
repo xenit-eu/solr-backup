@@ -1,0 +1,85 @@
+plugins {
+    id 'java'
+    id 'idea'
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'eu.xenit.docker'
+    apply plugin: 'eu.xenit.docker-compose.auto'
+    apply from: "${project.projectDir}/overload.gradle"
+
+    description = "Solr ${flavor} with backup"
+
+  sourceSets {
+        integrationTest {
+            java {
+                compileClasspath += main.output + test.output
+                runtimeClasspath += main.output + test.output
+                srcDirs = ["${project.parent.projectDir}/src/test/java"]
+            }
+        }
+    }
+    
+    configurations {
+        amazonSdkCore
+        amazonSdkS3
+        backupJar
+        integrationTestCompile.extendsFrom testCompile
+        integrationTestRuntime.extendsFrom testRuntime
+    }
+
+
+    dependencies {
+        amazonSdkCore group: 'com.amazonaws', name: 'aws-java-sdk-core', version:'1.12.32', ext:'jar'
+        amazonSdkS3 group: 'com.amazonaws', name: 'aws-java-sdk-s3', version:'1.12.32', ext:'jar'
+
+        integrationTestCompile group: 'io.rest-assured', name: 'rest-assured', version: '3.0.1'
+        integrationTestCompile group: 'io.rest-assured', name: 'json-path', version: '3.0.1'
+        integrationTestCompile group: 'io.rest-assured', name: 'rest-assured-common', version: '3.0.1'
+        integrationTestCompile group: 'junit', name: 'junit', version: '4.11'
+        integrationTestRuntime group: 'org.glassfish.jaxb', name: 'jaxb-runtime', version: '2.3.2'
+
+
+        backupJar project(path: ":solr-backup")
+    }
+
+    task integrationTest(type: Test, group: "verification") {
+        testClassesDirs = sourceSets.integrationTest.output.classesDirs
+        classpath = sourceSets.integrationTest.runtimeClasspath
+        outputs.upToDateWhen { false }
+
+        doFirst {
+            dockerCompose.exposeAsSystemProperties(integrationTest)
+            systemProperty("flavor", flavor)	    
+        }
+    }
+
+
+    createDockerFile {
+        from "${solrBaseImage}"
+
+        dependsOn(configurations.backupJar)
+
+        if(flavor == "solr6") {
+            smartCopy "${project.parent.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
+            smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
+            smartCopy configurations.amazonSdkCore.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
+            smartCopy configurations.amazonSdkS3.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
+        } 
+    }
+
+    dockerCompose {
+        isRequiredBy(integrationTest)
+        environment.put 'ALFRESCO_IMAGE', project.alfrescoimage
+        useComposeFiles = [
+                "${project.parent.projectDir}/src/test/resources/compose/docker-compose-swarm.yml"
+        ]
+
+        s3 {
+            useComposeFiles = [
+                    "${project.parent.projectDir}/src/test/resources/compose/docker-compose-s3.yml"
+            ]
+        }
+    }
+}

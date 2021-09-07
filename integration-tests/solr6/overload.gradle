@@ -1,0 +1,7 @@
+ext {
+    solrVersion = '6.6.5'
+    assVersion = '2.0.0'
+    solrBaseImage = 'hub.xenit.eu/public/alfresco-solr6:2.0.1'
+    alfrescoimage ='docker.io/xenit/alfresco-repository-community:6.1.2-ga'
+    flavor = 'solr6'
+}

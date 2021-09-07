@@ -1,0 +1,30 @@
+plugins {
+    id 'eu.xenit.docker' version '5.1.1' apply false
+    id 'eu.xenit.docker-compose' version '5.1.1' apply false
+    id 'de.marcphilipp.nexus-publish' version '0.4.0' apply false
+}
+
+subprojects {
+    version = '0.0.3'
+
+
+    boolean isRelease = System.env.BRANCH_NAME?.startsWith("release")
+    if (!isRelease)
+        version += "-SNAPSHOT"
+
+    repositories {
+        mavenCentral()
+        maven {
+            url 'https://artifacts.alfresco.com/nexus/content/groups/public'
+        }
+        maven {
+            url 'https://artifacts.alfresco.com/nexus/content/groups/private'
+            credentials {
+                username project.property('org.alfresco.maven.nexus.username')
+                password project.property('org.alfresco.maven.nexus.password')
+            }
+        }
+    }
+
+    apply from: "${rootProject.projectDir}/publish.gradle"
+}
