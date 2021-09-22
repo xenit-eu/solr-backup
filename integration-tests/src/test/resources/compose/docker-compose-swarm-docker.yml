@@ -1,0 +1,57 @@
+version: '3'
+
+services:
+ alfresco:
+    image: ${ALFRESCO_IMAGE}
+    restart: unless-stopped
+    ports:
+    - 8080
+    environment:
+    - INDEX
+    - SOLR_SSL=none
+    - GLOBAL_local.transform.service.enabled=false
+    - JAVA_XMX=2048M
+
+ postgresql:
+   image: docker.io/xenit/postgres
+   environment:
+   - POSTGRES_USER=alfresco
+   - POSTGRES_PASSWORD=admin
+   - POSTGRES_DB=alfresco
+   restart: unless-stopped
+
+ share:
+   image: docker.io/xenit/alfresco-share-community:6.1
+   ports:
+     - 8080
+
+ # container which starts up a Caringo Swarm stack (see https://caringo.atlassian.net/servicedesk/customer/portal/1/article/1335885844)
+ caringo:
+   image: hub.xenit.eu/caringo-swarm/caringo:demo-min
+   command: init.sh
+   volumes:
+   - /var/run/docker.sock:/var/run/docker.sock
+   environment:
+   - DOCKER_INTERFACE=localhost
+   - REGISTRY_URL=hub.xenit.eu/caringo-swarm/
+   - GATEWAY_ADMIN_PASSWORD=caringo
+
+ solr:
+    image: ${DOCKER_IMAGE}
+    restart: unless-stopped
+    hostname: solr
+    ports:
+    - 8080:8080
+    - 8000:8000
+    - 5000:5000
+    extra_hosts:
+    - "backup42:172.17.0.1"
+    depends_on:
+    - caringo
+    environment:
+    - ALFRESCO_SSL=none
+    - DEBUG=true
+    - JMX_ENABLED=true
+    - JAVA_XMX=1024M
+    - JAVA_OPTS_S3_BUCKET_NAME=-DS3_BUCKET_NAME=mybucket
+    - JAVA_OPTS_S3_ENDPOINT=-DS3_ENDPOINT=http://backup42:4285
