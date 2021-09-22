@@ -1,16 +1,13 @@
 plugins {
     id 'eu.xenit.docker' version '5.1.1' apply false
     id 'eu.xenit.docker-compose' version '5.1.1' apply false
-    id 'de.marcphilipp.nexus-publish' version '0.4.0' apply false
 }
 
 subprojects {
-    version = '0.0.3'
+    apply plugin: 'java'
 
-
-    boolean isRelease = System.env.BRANCH_NAME?.startsWith("release")
-    if (!isRelease)
-        version += "-SNAPSHOT"
+    version = '0.0.3' + getVersionQualifier(System.env.BRANCH_NAME ?: 'local')
+    ext.isReleaseVersion = !(version.endsWith("SNAPSHOT"))
 
     repositories {
         mavenCentral()
@@ -27,4 +24,14 @@ subprojects {
     }
 
     apply from: "${rootProject.projectDir}/publish.gradle"
+}
+
+def String getVersionQualifier(String branch_name) {
+    if (project.hasProperty('qualifier')) {
+        return '-' + project.getProperty('qualifier')
+    } else if (branch_name == 'release') {
+        return ''
+    } else {
+        return '-SNAPSHOT'
+    }
 }
