@@ -1,68 +1,74 @@
 # Solr backup
 
-This module builds an artifact which can be used to backup and restore solr indexes into S3 and S3-compatible storage endpoints.
+This module builds an artifact which can be used to backup and restore solr indexes into S3 and (some of the) S3-compatible storage endpoints.
 
 The original code for the S3 backup was taken from: https://github.com/athrog/solr/tree/solr-15089/solr/contrib/s3-repository.  
-It has been packported to solr6, since this is the version used by Alfresco currently. It cannot be backported further to solr4, because the only repository supported back then was the filesystem.
+It has been packported to solr6, since this is the version used by Alfresco currently. It cannot be backported further to solr4, because the only backup repository-storage supported back then was the filesystem.  
+Backported version is available in src/main/java/org/apache/solr/s3.
 
-Caringo Swarm is a backend system which is compatible with the S3 protocol. However, Caringo Swarm does not have a hierarchical structure and therefore the code for the S3 repository cannot be fully used.  
-New classes have been implemented for Caringo Swarm repository.
+Since that version does not work fully even with Amazon S3 (has been tested with adobe/s3mock), an adapted version has been implemented in src/main/java/eu/xenit/solr/backup/s3.
+
+This new version has been tested against multiple S3-compatible backends:
+
+* Amazon S3
+* DataCore Swarm docker environment (see https://caringo.atlassian.net/servicedesk/customer/portal/1/article/1335885844): Swarm 12.0.1, Content Gateway 7.5
+* DataCore Swarm Xenit's environment: Swarm 11.0.2, Content Gateway 6.2.0
+* Minio
+
+Integration tests follow the same line:
+
+* wait for solr to be populated with data, tracking alfresco
+* trigger a backup /solr/alfresco/replication?command=backup&repository=s3&location=s3:///&numberToKeep=3
+* check if the backup finished in a certain timeout (3 minutes) by following the output of /solr/alfresco/replication?command=details
+* trigger a restore /solr/alfresco/replication?command=restore&repository=s3&location=s3:///
+* check if the restore was successful in a certain timeout (3 minutes) by following the output of /solr/alfresco/replication?command=restorestatus
 
 ## Variables
 
-| Environment variable                    | Java system property                           | Comments                               |
-| --------------------------- | --------------------------------- | -------------------------------------- |
-|                             | -DBLOB_S3_ENDPOINT | Needs to be set as a system property, so that it is substituted in solr.xml |
-|                             | -DBLOB_S3_BUCKET_NAME | Needs to be set as a system property, so that it is substituted in solr.xml |
-| AWS_ACCESS_KEY_ID | | Access key to access the S3 enpoint |
-| AWS_SECRET_KEY | | Secret key to access the S3 endpoint |
+| Environment variable                    | Java system property                           | Default                                         |     Comments                               |
+| --------------------------------------- | ---------------------------------------------- | ------------------------------------------------| ------------------------------------------ |
+|                                         | -DS3_ENDPOINT                                  |  http://s3.eu-central-1.amazonaws.com           | Needs to be set as a system property, so that it is substituted in solr.xml |
+|                                         | -DS3_BUCKET_NAME                               |                                                 | Needs to be set as a system property, so that it is substituted in solr.xml |
+|                                         | -DS3_REGION                                    |  eu-central-1                                   | Needs to be set as a system property, so that it is substituted in solr.xml |
+| AWS_ACCESS_KEY_ID                       |                                                |                                                 | Access key to access the S3 enpoint |
+| AWS_SECRET_KEY                          |                                                |                                                 | Secret key to access the S3 endpoint |
+| AWS_SHARED_CREDENTIALS_FILE             |                                                |                                                 | File with credentials (if they are not set via environment variables)                |
 
 
-## Testing locally
 
-### Swarm
+## Testing against DataCore Swarm docker
 
-Starting up solr with swarm repository (will need credentials + access to a real Swarm, replace relevant properties in docker-compose-swarm.yml):
+    ./gradlew integration-tests:solr6:integrationTestSwarmDocker
 
-    ./gradlew integration-tests:solr6:cU
+ Solr waits for the Swarm environment to be started and then requests an ACCESS_KEY via an init script, which is further used to authenticate.
 
-Create a backup in the bucket test-solr-backup in swarm:
+## Testing against Amazon S3
 
-    curl "http://localhost:8080/solr/alfresco/replication?command=backup&repository=swarm&location=swarm:///&name=test"
+Before running the tests, following variables need to be set to an S3 bucket and working credentials.
 
-Wait until backup is finished - look for property snapshotCompletedAt:
+    export AWS_S3_BUCKET_NAME=...
+    export AWS_S3_ACCESS_KEY=...
+    export AWS_S3_SECRET_KEY=...
+    
+    ./gradlew integration-tests:solr6:integrationTestAwsS3
 
-    curl "http://localhost:8080/solr/alfresco/replication?command=details"
 
-Restore from the backup:
+## Testing against Xenit's Swarm environment at Hetzner
 
-    curl "http://localhost:8080/solr/alfresco/replication?command=restore&repository=swarm&location=swarm:///&name=test"
+Before running the tests, following variables need to be set to an S3 bucket and working credentials.
 
-Check that the restore has been successful:
+    export HETZNER_S3_ACCESS_KEY=...
+    export HETZNER_S3_SECRET_KEY=...
+    
+    ./gradlew integration-tests:solr6:integrationTestSwarmHetzner
 
-    curl "http://localhost:8080/solr/alfresco/replication?command=restorestatus"
 
-If the name of the backup is not given when backing up, it will be automatically created as a timestamp. In this case, an additional parameter can be added to the url, specifying how many snapshots are to be kept: <numberToKeep>. In the case of a restore, parameter name is mandatory.
+# Testing against Minio
 
-### S3
+Before running the tests, following variables need to be set to an S3 bucket and working credentials.
 
-Starting up solr (using the mock from https://github.com/adobe/S3Mock):
+    ./gradlew integration-tests:solr6:integrationTestMinio
 
-    ./gradlew integration-tests:solr6:s3CU
+These tests fail, likely because Minio does not support S3 compatible folder structure: https://github.com/minio/minio/issues/10160
 
-Create a backup in the bucket TEST_BUCKET in S3:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=backup&repository=s3&location=s3:/&name=test"
-
-Wait until backup is finished:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=details"
-
-Restore from the backup:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=restore&repository=s3&location=s3:/&name=test"
-
-Check that the restore has been successful:
-
-    curl "http://localhost:8080/solr/alfresco/replication?command=restorestatus"
 

@@ -5,6 +5,15 @@ title: Changelog - Solr Backup
 
 ## Unreleased
 
+
+* Second iteration [#2]
+  * Keep single implementation for S3 and Swarm
+  * Add integration tests
+  * Test against various setups
+  * Build and publish via github actions
+
+[#2]: https://github.com/xenit-eu/solr-backup/pull/2
+
 ### Added
 * [ALFREDOPS-764] First version [#1]
 
