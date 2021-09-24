@@ -25,7 +25,6 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'eu.xenit.docker'
     apply plugin: 'eu.xenit.docker-compose.auto'
-    apply plugin: 'com.bmuschko.docker-remote-api'    
     apply from: "${project.projectDir}/overload.gradle"
 
     description = "Solr ${flavor} with backup"

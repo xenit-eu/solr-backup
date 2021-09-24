@@ -6,7 +6,7 @@ The original code for the S3 backup was taken from: https://github.com/athrog/so
 It has been packported to solr6, since this is the version used by Alfresco currently. It cannot be backported further to solr4, because the only backup repository-storage supported back then was the filesystem.  
 Backported version is available in src/main/java/org/apache/solr/s3.
 
-Since that version does not work fully even with Amazon S3 (has been tested with adobe/s3mock), an adapted version has been implemented in src/main/java/eu/xenit/solr/backup/s3.
+Since that version does not work fully even with Amazon S3, an adapted version has been implemented in src/main/java/eu/xenit/solr/backup/s3.
 
 This new version has been tested against multiple S3-compatible backends:
 
