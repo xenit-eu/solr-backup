@@ -2,28 +2,19 @@ pipeline {
     agent any
 
     stages {
+        // run the integration tests against Caringo Swarm @Hetzner and against Amazon S3
         stage("Integration test") {
-            steps {
-                sh "./gradlew integrationTest"
-            }
-        }
-    
-
-        stage('Publish') {
-            when {
-                anyOf {
-                    branch "master*"
-                    branch "release*"
-                }
-            }
             environment {
-                SONATYPE_CREDENTIALS = credentials('sonatype')
-                GPGPASSPHRASE = credentials('gpgpassphrase')
+               HETZNER_S3_ENDPOINT = credentials('HETZNER_SWARM_S3_ENDPOINT')
+               HETZNER_S3_ACCESS_KEY = credentials('HETZNER_SWARM_S3_ACCESS_KEY')
+               HETZNER_S3_SECRET_KEY = credentials('HETZNER_SWARM_S3_SECRET_KEY')
+               AWS_S3_BUCKET_NAME = credentials('AWS_S3_SOLRBACKUP_BUCKET_NAME')
+               AWS_S3_ACCESS_KEY = credentials('AWS_S3_ACCESS_KEY')
+               AWS_S3_SECRET_KEY = credentials('AWS_S3_SECRET_KEY')
             }
             steps {
-                script {
-                    sh "./gradlew publish -Ppublish_username=${SONATYPE_CREDENTIALS_USR} -Ppublish_password=${SONATYPE_CREDENTIALS_PSW} -PkeyId=DF8285F0 -Ppassword=${GPGPASSPHRASE} -PsecretKeyRingFile=/var/jenkins_home/secring.gpg"
-                }
+                sh "./gradlew integration-tests:solr6:integrationTestSwarmHetzner"
+                sh "./gradlew integration-tests:solr6:integrationTestAwsS3"
             }
         }
     }

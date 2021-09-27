@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.xenit.solr.backup.s3;
+package org.apache.solr.s3;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -81,11 +81,11 @@ class S3IndexInput extends BufferedIndexInput {
 
     if (b.remaining() > 0) {
       throw new IOException(
-              String.format(
-                      Locale.ROOT,
-                      "Failed to read %d bytes; only %d available",
-                      expectedLength,
-                      (expectedLength - b.remaining())));
+          String.format(
+              Locale.ROOT,
+              "Failed to read %d bytes; only %d available",
+              expectedLength,
+              (expectedLength - b.remaining())));
     }
 
     position += expectedLength;
@@ -95,7 +95,7 @@ class S3IndexInput extends BufferedIndexInput {
   protected void seekInternal(long toPosition) throws IOException {
     if (toPosition > length()) {
       throw new EOFException(
-              "read past EOF: pos=" + toPosition + " vs length=" + length() + ": " + this);
+          "read past EOF: pos=" + toPosition + " vs length=" + length() + ": " + this);
     }
 
     // If we seek forward, skip unread bytes

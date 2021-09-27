@@ -14,25 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.xenit.solr.backup.s3;
 
-import java.io.IOException;
-
-/**
- * Generic exception for S3 related failures. Could originate from the {@link S3BackupRepository} or
- * from its underlying {@link S3StorageClient}.
- */
-public class S3Exception extends IOException {
-
-  public S3Exception(Throwable cause) {
-    super(cause);
-  }
-
-  public S3Exception(String message) {
-    super(message);
-  }
-
-  public S3Exception(String message, Throwable cause) {
-    super(message, cause);
-  }
-}
+/** Solr S3 backup repository */
+package org.apache.solr.s3;

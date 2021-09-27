@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.xenit.solr.backup.s3;
+package org.apache.solr.s3;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -40,7 +40,6 @@ import java.io.OutputStream;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -122,7 +121,7 @@ class S3StorageClient {
 
   /** Create a directory in S3. */
   void createDirectory(String path) throws S3Exception {
-   path = sanitizedDirPath(path);
+    path = sanitizedDirPath(path);
 
     if (!parentDirectoryExist(path)) {
       createDirectory(getParentDirectory(path));
@@ -133,10 +132,9 @@ class S3StorageClient {
     ObjectMetadata objectMetadata = new ObjectMetadata();
     objectMetadata.setContentType(S3_DIR_CONTENT_TYPE);
     objectMetadata.setContentLength(0);
-    objectMetadata.setUserMetadata(Collections.singletonMap("Content-type",S3_DIR_CONTENT_TYPE));
 
     // Create empty object with header
-    InputStream im = ClosedInputStream.CLOSED_INPUT_STREAM;
+    final InputStream im = ClosedInputStream.CLOSED_INPUT_STREAM;
 
     try {
       PutObjectRequest putRequest = new PutObjectRequest(bucketName, path, im, objectMetadata);
@@ -196,8 +194,7 @@ class S3StorageClient {
   String[] listDir(String path) throws S3Exception {
     path = sanitizedDirPath(path);
 
-    String prefix = "";
-    if(!path.equals("/")) prefix = path;
+    String prefix = path;
     ListObjectsRequest listRequest =
         new ListObjectsRequest()
             .withBucketName(bucketName)
@@ -216,11 +213,10 @@ class S3StorageClient {
         files.addAll(objectListing.getCommonPrefixes());
         // This filtering is needed only for S3mock. Real S3 does not ignore the trailing '/' in the
         // prefix.
-          String finalPrefix = prefix;
-          files =
+        files =
             files.stream()
-                .filter(s -> s.startsWith(finalPrefix))
-                .map(s -> s.substring(finalPrefix.length()))
+                .filter(s -> s.startsWith(prefix))
+                .map(s -> s.substring(prefix.length()))
                 .filter(s -> !s.isEmpty())
                 .filter(
                     s -> {
@@ -278,25 +274,15 @@ class S3StorageClient {
    * @return true if path is directory, otherwise false.
    */
   boolean isDirectory(String path) throws S3Exception {
-      String dirPath = sanitizedDirPath(path);
+    path = sanitizedDirPath(path);
 
     try {
-      ObjectMetadata objectMetadata = s3Client.getObjectMetadata(bucketName, dirPath);
+      ObjectMetadata objectMetadata = s3Client.getObjectMetadata(bucketName, path);
       String contentType = objectMetadata.getContentType();
 
-      return !StringUtils.isEmpty(contentType) && (contentType.equalsIgnoreCase(S3_DIR_CONTENT_TYPE));
+      return !StringUtils.isEmpty(contentType) && contentType.equalsIgnoreCase(S3_DIR_CONTENT_TYPE);
     } catch (AmazonClientException ase) {
-        String filePath = sanitizedFilePath(path);
-        try {
-            ObjectMetadata objectMetadata = s3Client.getObjectMetadata(bucketName, filePath);
-            String contentType = objectMetadata.getContentType();
-
-            return !StringUtils.isEmpty(contentType) && (contentType.equalsIgnoreCase(S3_DIR_CONTENT_TYPE));
-        } catch (AmazonClientException e) {
-            log.error("Could not get back {} from S3, tried both as a folder and as a file", path);
-            return false;
-            //throw handleAmazonException(ase);
-        }
+      throw handleAmazonException(ase);
     }
   }
 
@@ -348,10 +334,9 @@ class S3StorageClient {
   OutputStream pushStream(String path) throws S3Exception {
     path = sanitizedFilePath(path);
 
-/*    if (!parentDirectoryExist(path)) {
-      log.error("Parent directory doesn't exist for path {}",path);
-      //throw new S3Exception("Parent directory doesn't exist of path: " + path);
-    }*/
+    if (!parentDirectoryExist(path)) {
+      throw new S3Exception("Parent directory doesn't exist of path: " + path);
+    }
 
     try {
       return new S3OutputStream(s3Client, path, bucketName);

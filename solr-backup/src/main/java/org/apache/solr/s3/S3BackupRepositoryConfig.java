@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.xenit.solr.backup.s3;
+package org.apache.solr.s3;
 
 import java.util.Locale;
 import org.apache.solr.common.util.NamedList;

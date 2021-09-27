@@ -3,6 +3,24 @@ plugins {
     id 'idea'
 }
 
+dependencies {
+    testImplementation group: 'io.rest-assured', name: 'rest-assured', version: '3.0.1'
+    testImplementation group: 'io.rest-assured', name: 'json-path', version: '3.0.1'
+    testImplementation group: 'io.rest-assured', name: 'rest-assured-common', version: '3.0.1'
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:5.4.2"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:5.4.2"
+
+    testRuntime group: 'org.glassfish.jaxb', name: 'jaxb-runtime', version: '2.3.2'
+}
+
+test {
+    enabled = false
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'eu.xenit.docker'
@@ -11,50 +29,68 @@ subprojects {
 
     description = "Solr ${flavor} with backup"
 
-  sourceSets {
-        integrationTest {
-            java {
-                compileClasspath += main.output + test.output
-                runtimeClasspath += main.output + test.output
-                srcDirs = ["${project.parent.projectDir}/src/test/java"]
-            }
-        }
-    }
-    
     configurations {
         amazonSdkCore
         amazonSdkS3
         backupJar
-        integrationTestCompile.extendsFrom testCompile
-        integrationTestRuntime.extendsFrom testRuntime
     }
-
 
     dependencies {
         amazonSdkCore group: 'com.amazonaws', name: 'aws-java-sdk-core', version:'1.12.32', ext:'jar'
         amazonSdkS3 group: 'com.amazonaws', name: 'aws-java-sdk-s3', version:'1.12.32', ext:'jar'
 
-        integrationTestCompile group: 'io.rest-assured', name: 'rest-assured', version: '3.0.1'
-        integrationTestCompile group: 'io.rest-assured', name: 'json-path', version: '3.0.1'
-        integrationTestCompile group: 'io.rest-assured', name: 'rest-assured-common', version: '3.0.1'
-        integrationTestCompile group: 'junit', name: 'junit', version: '4.11'
-        integrationTestRuntime group: 'org.glassfish.jaxb', name: 'jaxb-runtime', version: '2.3.2'
-
-
         backupJar project(path: ":solr-backup")
     }
 
-    task integrationTest(type: Test, group: "verification") {
-        testClassesDirs = sourceSets.integrationTest.output.classesDirs
-        classpath = sourceSets.integrationTest.runtimeClasspath
+    task integrationTestSwarmDocker(type: Test, group: "verification") {
+        useJUnitPlatform()
+        testClassesDirs = project.parent.sourceSets.test.output.classesDirs
+        classpath = project.parent.sourceSets.test.runtimeClasspath
         outputs.upToDateWhen { false }
 
         doFirst {
-            dockerCompose.exposeAsSystemProperties(integrationTest)
-            systemProperty("flavor", flavor)	    
+            dockerCompose.exposeAsSystemProperties(integrationTestSwarmDocker)
         }
     }
 
+    task integrationTestSwarmHetzner(type: Test, group: "verification") {
+        useJUnitPlatform()
+        testClassesDirs = project.parent.sourceSets.test.output.classesDirs
+        classpath = project.parent.sourceSets.test.runtimeClasspath
+        outputs.upToDateWhen { false }
+
+        doFirst {
+            dockerCompose.swarmHetzner.exposeAsSystemProperties(integrationTestSwarmHetzner)
+        }
+    }
+
+    task integrationTestAwsS3(type: Test, group: "verification") {
+        useJUnitPlatform()
+        testClassesDirs = project.parent.sourceSets.test.output.classesDirs
+        classpath = project.parent.sourceSets.test.runtimeClasspath
+        outputs.upToDateWhen { false }
+
+        doFirst {
+            dockerCompose.awsS3.exposeAsSystemProperties(integrationTestAwsS3)
+        }
+    }
+
+    task integrationTestMinio(type: Test, group: "verification") {
+        useJUnitPlatform()
+        testClassesDirs = project.parent.sourceSets.test.output.classesDirs
+        classpath = project.parent.sourceSets.test.runtimeClasspath
+        outputs.upToDateWhen { false }
+
+        doFirst {
+            dockerCompose.minio.exposeAsSystemProperties(integrationTestMinio)
+        }
+    }
+    
+    task integrationTests(type: Test, group: "verification") {
+        dependsOn(integrationTestSwarmDocker)
+    }
+
+    check.dependsOn integrationTests
 
     createDockerFile {
         from "${solrBaseImage}"
@@ -63,6 +99,7 @@ subprojects {
 
         if(flavor == "solr6") {
             smartCopy "${project.parent.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
+            smartCopy "${project.parent.projectDir}/src/test/resources/96-get-s3-credentials.sh", "/docker-entrypoint.d/"	    
             smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
             smartCopy configurations.amazonSdkCore.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
             smartCopy configurations.amazonSdkS3.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
@@ -70,16 +107,32 @@ subprojects {
     }
 
     dockerCompose {
-        isRequiredBy(integrationTest)
         environment.put 'ALFRESCO_IMAGE', project.alfrescoimage
         useComposeFiles = [
-                "${project.parent.projectDir}/src/test/resources/compose/docker-compose-swarm.yml"
+                "${project.parent.projectDir}/src/test/resources/compose/docker-compose-swarm-docker.yml"
         ]
+        isRequiredBy(project.tasks.integrationTestSwarmDocker)
 
-        s3 {
+
+        awsS3 {
             useComposeFiles = [
-                    "${project.parent.projectDir}/src/test/resources/compose/docker-compose-s3.yml"
+                    "${project.parent.projectDir}/src/test/resources/compose/docker-compose-aws-s3.yml"
             ]
+            isRequiredBy(project.tasks.integrationTestAwsS3)
+        }
+
+        minio {
+            useComposeFiles = [
+                    "${project.parent.projectDir}/src/test/resources/compose/docker-compose-minio.yml"
+            ]
+            isRequiredBy(project.tasks.integrationTestMinio)
+        }
+
+        swarmHetzner {
+            useComposeFiles = [
+                    "${project.parent.projectDir}/src/test/resources/compose/docker-compose-swarm-hetzner.yml"
+            ]
+            isRequiredBy(project.tasks.integrationTestSwarmHetzner)
         }
     }
 }

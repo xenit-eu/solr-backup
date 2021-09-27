@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.xenit.solr.backup.s3;
+package org.apache.solr.s3;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -253,8 +253,8 @@ public class S3BackupRepository implements BackupRepository {
   }
 
   @Override
-    public void copyFileFrom(Directory sourceDir, String fileName, URI dest) throws IOException {
-        copyIndexFileFrom(sourceDir,fileName,dest,fileName);
+  public void copyFileFrom(Directory sourceDir, String fileName, URI dest) throws IOException {
+    copyIndexFileFrom(sourceDir,fileName,dest,fileName);
   }
 
   /**
@@ -316,10 +316,12 @@ public class S3BackupRepository implements BackupRepository {
     }
   }
 
+
+
   @Override
-    public void copyFileTo(URI sourceRepo, String fileName, Directory dest) throws IOException {
-        copyIndexFileTo(sourceRepo,fileName,dest,fileName);
-    }
+  public void copyFileTo(URI sourceRepo, String fileName, Directory dest) throws IOException {
+      copyIndexFileTo(sourceRepo,fileName,dest,fileName);
+  }
 
   /**
    * Copy an index file from specified <code>sourceRepo</code> to the destination directory (i.e.
