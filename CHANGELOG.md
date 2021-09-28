@@ -5,6 +5,8 @@ title: Changelog - Solr Backup
 
 ## Unreleased
 
+## v0.0.3 - 28-09-2021
+
 
 * Second iteration [#2]
   * Keep single implementation for S3 and Swarm
