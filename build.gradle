@@ -1,6 +1,7 @@
 plugins {
     id 'eu.xenit.docker' version '5.1.1' apply false
     id 'eu.xenit.docker-compose' version '5.1.1' apply false
+    id "be.vbgn.ci-detect" version "0.5.0"    
 }
 
 def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
@@ -12,7 +13,7 @@ def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
 subprojects {
     apply plugin: 'java'
 
-    version = '0.0.3' + getVersionQualifier(System.env.BRANCH_NAME ?: 'local')
+    version = '0.0.3' + getVersionQualifier(ci.branch ?: 'local')
     ext.isReleaseVersion = !(version.endsWith("SNAPSHOT"))
 
     // It is not possible to set properties with a dot via GitHub Actions env variables, therefore we introduce support
