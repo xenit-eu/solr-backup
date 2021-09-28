@@ -13,7 +13,7 @@ def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
 subprojects {
     apply plugin: 'java'
 
-    version = '0.0.3' + getVersionQualifier(ci.branch ?: 'local')
+    version = '0.0.4' + getVersionQualifier(ci.branch ?: 'local')
     ext.isReleaseVersion = !(version.endsWith("SNAPSHOT"))
 
     // It is not possible to set properties with a dot via GitHub Actions env variables, therefore we introduce support
