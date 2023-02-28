@@ -3,12 +3,7 @@
     <str name="adminHandler">${adminHandler:org.alfresco.solr.AlfrescoCoreAdminHandler}</str>
 
     <backup>
-        <repository name="s3" class="eu.xenit.solr.backup.s3.S3BackupRepository" default="false">
-            <str name="s3.bucket.name">${S3_BUCKET_NAME}</str>
-            <str name="s3.endpoint">${S3_ENDPOINT:http://s3.eu-central-1.amazonaws.com}</str>
-            <str name="s3.region">${S3_REGION:eu-central-1}</str>
-        </repository>
-        <repository name="s3Original" class="org.apache.solr.s3.S3BackupRepository" default="false">
+        <repository name="s3" class="eu.xenit.solr.backup.s3.S3BackupRepository" default="true">
             <str name="s3.bucket.name">${S3_BUCKET_NAME}</str>
             <str name="s3.endpoint">${S3_ENDPOINT:http://s3.eu-central-1.amazonaws.com}</str>
             <str name="s3.region">${S3_REGION:eu-central-1}</str>

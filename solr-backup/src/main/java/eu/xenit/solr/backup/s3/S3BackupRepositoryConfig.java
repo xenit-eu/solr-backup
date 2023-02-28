@@ -46,7 +46,9 @@ public class S3BackupRepositoryConfig {
     endpoint = getStringConfig(config, ENDPOINT);
   }
 
-  /** Construct a {@link S3StorageClient} from the provided config. */
+  /**
+   * @return a {@link S3StorageClient} from the provided config.
+   */
   public S3StorageClient buildClient() {
     return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint);
   }

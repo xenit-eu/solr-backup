@@ -1,7 +1,6 @@
 plugins {
-    id 'eu.xenit.docker' version '5.1.1' apply false
-    id 'eu.xenit.docker-compose' version '5.1.1' apply false
-    id "be.vbgn.ci-detect" version "0.5.0"    
+    id 'eu.xenit.docker' version '5.4.0' apply false
+    id 'eu.xenit.docker-compose' version '5.4.0' apply false
 }
 
 def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
@@ -12,9 +11,8 @@ def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
 
 subprojects {
     apply plugin: 'java'
-
-    version = '0.0.4' + getVersionQualifier(ci.branch ?: 'local')
-    ext.isReleaseVersion = !(version.endsWith("SNAPSHOT"))
+    def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.4'
+    version = baseVersion[1..baseVersion.length() - 1]
 
     // It is not possible to set properties with a dot via GitHub Actions env variables, therefore we introduce support
     // for a non-dotted-equivalent
@@ -35,15 +33,5 @@ subprojects {
         }
     }
 
-    apply from: "${rootProject.projectDir}/publish.gradle"
-}
 
-def String getVersionQualifier(String branch_name) {
-    if (project.hasProperty('qualifier')) {
-        return '-' + project.getProperty('qualifier')
-    } else if (branch_name == 'release') {
-        return ''
-    } else {
-        return '-SNAPSHOT'
-    }
 }

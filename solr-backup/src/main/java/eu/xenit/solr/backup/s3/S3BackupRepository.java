@@ -91,9 +91,20 @@ public class S3BackupRepository implements BackupRepository {
       } else {
         result = new URI(S3_SCHEME, null, "/" + location, null);
       }
+      createBackUpDirectory(result);
       return result;
     } catch (URISyntaxException ex) {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, ex);
+    }
+  }
+
+  private void createBackUpDirectory(URI result) {
+    try {
+      if(!exists(result)){
+        createDirectory(result);
+      }
+    } catch (IOException e) {
+      log.error(e.getMessage(),e);
     }
   }
 
@@ -262,7 +273,8 @@ public class S3BackupRepository implements BackupRepository {
    * backup).
    *
    * @param sourceDir The source directory hosting the file to be copied.
-   * @param sourceFileName The name of the file to be copied
+   * @param sourceFileName The name of the file to be copied.
+   * @param destFileName The name of the file to  copy to.
    * @param dest The destination backup location.
    * @throws IOException in case of errors
    * @throws CorruptIndexException in case checksum of the file does not match with precomputed
@@ -327,6 +339,8 @@ public class S3BackupRepository implements BackupRepository {
    *
    * @param sourceDir The source URI hosting the file to be copied.
    * @param dest The destination where the file should be copied.
+   * @param sourceFileName The name of the file to be copied
+   * @param destFileName The name of the file to  copy to.
    * @throws IOException in case of errors.
    */
   public void copyIndexFileTo(
