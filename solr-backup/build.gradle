@@ -7,7 +7,7 @@ group = 'eu.xenit.solr-backup'
 
 ext {
     solrVersion = '6.6.5'
-    assVersion = '2.0.0'
+    assVersion = '2.0.6'
 }
 
 java {
@@ -31,10 +31,4 @@ dependencies {
     implementation ('com.amazonaws:aws-java-sdk-s3')
 }
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-        }
-    }
-}
+apply from: "${rootProject.projectDir}/publish.gradle"

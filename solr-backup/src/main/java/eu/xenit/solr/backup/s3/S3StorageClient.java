@@ -257,6 +257,9 @@ class S3StorageClient {
    * @return true if path exists, otherwise false?
    */
   boolean pathExists(String path) throws S3Exception {
+    if(isDirectory(path)) {
+      return true;
+    }
     path = sanitizedPath(path);
 
     // for root return true
@@ -295,7 +298,6 @@ class S3StorageClient {
         } catch (AmazonClientException e) {
             log.error("Could not get back {} from S3, tried both as a folder and as a file", path);
             return false;
-            //throw handleAmazonException(ase);
         }
     }
   }
@@ -348,10 +350,9 @@ class S3StorageClient {
   OutputStream pushStream(String path) throws S3Exception {
     path = sanitizedFilePath(path);
 
-/*    if (!parentDirectoryExist(path)) {
-      log.error("Parent directory doesn't exist for path {}",path);
-      //throw new S3Exception("Parent directory doesn't exist of path: " + path);
-    }*/
+    if (!parentDirectoryExist(path)) {
+      throw new S3Exception("Parent directory doesn't exist of path: " + path);
+    }
 
     try {
       return new S3OutputStream(s3Client, path, bucketName);
@@ -516,7 +517,8 @@ class S3StorageClient {
     String sanitizedPath = sanitizedPath(path);
 
     if (sanitizedPath.endsWith(S3_FILE_PATH_DELIMITER)) {
-      throw new S3Exception("Invalid Path. Path for file can't end with '/'");
+      sanitizedPath = sanitizedPath.substring(0, sanitizedPath.length() - 1).trim();
+//      throw new S3Exception("Invalid Path. Path for file can't end with '/'");
     }
 
     if (sanitizedPath.isEmpty()) {

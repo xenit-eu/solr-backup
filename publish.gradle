@@ -3,6 +3,9 @@ apply plugin: 'signing'
 
 publishing {
     publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
         all {
             pom {
                 url = 'https://github.com/xenit-eu/solr-backup'
@@ -32,21 +35,21 @@ publishing {
     }
 
     repositories {
-        if (isReleaseVersion) {
-                sonatypeMavenCentral {
-                  credentials {
-                    username = project.findProperty('sonatype_username')
-                    password = project.findProperty('sonatype_password')
-                }
-            }
-        } else {
-            sonatypeSnapshots {
-                credentials {
-                    username = project.findProperty('sonatype_username')
-                    password = project.findProperty('sonatype_password')
-                }
+        maven {
+            def releasesRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            def snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            url = version.toString().endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+
+            credentials {
+                username = project.findProperty('sonatype_username')
+                password = project.findProperty('sonatype_password')
             }
         }
     }
 }
 
+signing {
+    required { !version.toString().endsWith("SNAPSHOT") }
+    useInMemoryPgpKeys(findProperty("signingKeyId"), findProperty("signingKey"), findProperty("signingPassword"))
+    sign publishing.publications
+}

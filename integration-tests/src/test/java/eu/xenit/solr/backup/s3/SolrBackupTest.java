@@ -1,18 +1,23 @@
 package eu.xenit.solr.backup.s3;
 
-import static io.restassured.RestAssured.given;
-import static java.lang.Thread.sleep;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import groovy.util.logging.Slf4j;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.parsing.Parser;
 import io.restassured.specification.RequestSpecification;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static io.restassured.RestAssured.given;
+import static java.lang.Thread.sleep;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class SolrBackupTest {
+@Slf4j
+class SolrBackupTest {
+    private static final Log log = LogFactory.getLog(SolrBackupTest.class);
     static RequestSpecification spec;
     static RequestSpecification specBackup;
     static RequestSpecification specBackupDetails;
@@ -21,14 +26,13 @@ public class SolrBackupTest {
 
     @BeforeEach
     public void setup() {
-
         String basePathSolr = "solr/alfresco";
         String basePathSolrBackup = "solr/alfresco/replication";
-        String solrHost = System.getProperty("solr.host","localhost");
+        String solrHost = System.getProperty("solr.host", "localhost");
         int solrPort = 0;
         try {
-            solrPort = Integer.parseInt(System.getProperty("solr.tcp.8080","8080"));
-        } catch(NumberFormatException e) {
+            solrPort = Integer.parseInt(System.getProperty("solr.tcp.8080", "8080"));
+        } catch (NumberFormatException e) {
             System.out.println("Solr port 8080 is not exposed, probably ssl is enabled");
         }
 
@@ -46,32 +50,33 @@ public class SolrBackupTest {
                 .setBaseUri(baseURISolr)
                 .setPort(solrPort)
                 .setBasePath(basePathSolrBackup)
-                .addParam("command","backup")
-                .addParam("repository","s3")
-                .addParam("location","s3:///")
-                .addParam("numberToKeep","3")
+                .addParam("command", "backup")
+                .addParam("repository", "s3")
+                .addParam("location", "s3:///")
+                .addParam("numberToKeep", "3")
+                .addParam("wt", "json")
                 .build();
         specBackupDetails = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
                 .setPort(solrPort)
                 .setBasePath(basePathSolrBackup)
-                .addParam("command","details")
-                .addParam("wt","json")
+                .addParam("command", "details")
+                .addParam("wt", "json")
                 .build();
         specRestore = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
                 .setPort(solrPort)
                 .setBasePath(basePathSolrBackup)
-                .addParam("command","restore")
-                .addParam("repository","s3")
-                .addParam("location","s3:///")
+                .addParam("command", "restore")
+                .addParam("repository", "s3")
+                .addParam("location", "s3:///")
                 .build();
         specRestoreStatus = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
                 .setPort(solrPort)
                 .setBasePath(basePathSolrBackup)
-                .addParam("command","restorestatus")
-                .addParam("wt","json")
+                .addParam("command", "restorestatus")
+                .addParam("wt", "json")
                 .build();
 
 
@@ -79,23 +84,26 @@ public class SolrBackupTest {
         try {
             sleep(30000);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            log.error(e);
         }
     }
 
     @Test
-    public void testBackupEndpoint() {
-        given()
+    void testBackupEndpoint() {
+        String status = given()
                 .spec(specBackup)
                 .when()
                 .get()
                 .then()
-                .statusCode(200);
-        System.out.println("Backup triggered, will wait maximum 3 minutes");
+                .statusCode(200)
+                .extract()
+                .path("status");
+        assertEquals("OK", status);
+        System.out.println("Backup triggered, will wait maximum 6 minutes");
         Object backup = null;
-        long timeout = 180000;
+        long timeout = 500000;
         long elapsed = 0;
-        while(backup == null && elapsed<timeout) {
+        while (backup == null && elapsed < timeout) {
             backup = given()
                     .spec(specBackupDetails)
                     .when()
@@ -104,19 +112,19 @@ public class SolrBackupTest {
                     .statusCode(200)
                     .extract()
                     .path("details.backup");
-            System.out.println("completedAt=" + backup);
+            System.out.println("elapsed =" + elapsed);
             try {
                 sleep(1000);
                 elapsed += 1000;
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error(e);
             }
         }
-        assertTrue(elapsed<timeout);
+        assertTrue(elapsed < timeout);
     }
 
     @Test
-    public void testRestoreEndpoint() {
+    void testRestoreEndpoint() {
         given()
                 .spec(specRestore)
                 .when()
@@ -127,7 +135,7 @@ public class SolrBackupTest {
         String status = "";
         long timeout = 180000;
         long elapsed = 0;
-        while(!"success".equals(status) && elapsed<timeout) {
+        while (!"success".equals(status) && elapsed < timeout) {
             status = given()
                     .spec(specRestoreStatus)
                     .when()
@@ -141,10 +149,10 @@ public class SolrBackupTest {
                 sleep(1000);
                 elapsed += 1000;
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error(e);
             }
         }
-        assertTrue(elapsed<timeout);
+        assertTrue(elapsed < timeout);
     }
 
 }

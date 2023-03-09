@@ -1,12 +1,10 @@
 name: build
 on:
   push:
-  pull_request:
-
+  workflow_dispatch:
 env:
   ORG_GRADLE_PROJECT_alfresco_nexus_username: ${{ secrets.ALFRESCO_NEXUS_USERNAME }}
   ORG_GRADLE_PROJECT_alfresco_nexus_password: ${{ secrets.ALFRESCO_NEXUS_PASSWORD }}
-  
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
@@ -17,13 +15,26 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 11
+      - name: Login to Docker
+        run: |
+          echo "${{ secrets.CLOUDSMITH_APIKEY }}" | docker login private.docker.xenit.eu --username "${{ secrets.CLOUDSMITH_USER }}" --password-stdin
       - name: Test
-        run: ./gradlew integration-tests:solr6:integrationTests
-
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: false
+          arguments: |
+            integration-tests:solr6:integrationTest
+      - name: Upload Test Artifact
+        if: success() || failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-result
+          path: /home/runner/work/**/build/reports
+          retention-days: 2
   publish:
-    needs: [integration-tests]
+    needs: [ integration-tests ]
     runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/heads/master') || startswith(github.ref, 'refs/heads/release') }}
+    if: ${{  startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -31,10 +42,16 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 11
+      - name: Add TAG_VERSION env property
+        run: echo "TAG_VERSION=`echo ${GITHUB_REF#refs/tags/}`" >> $GITHUB_ENV
       - name: Publish
+        uses: gradle/gradle-build-action@v2
         env:
-          SIGNING_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_KEY }}
-          SIGNING_PASSWORD: ${{ secrets.MAVEN_CENTRAL_GPG_PASSWORD }}
-          ORG_GRADLE_PROJECT_sonatype_username: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_sonatype_password: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-        run: ./gradlew publish
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.MAVEN_CENTRAL_GPG_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.MAVEN_CENTRAL_GPG_PASSWORD }}
+          ORG_GRADLE_PROJECT_sonatype_username: ${{ secrets.SONATYPE_S01_USERNAME }}
+          ORG_GRADLE_PROJECT_sonatype_password: ${{ secrets.SONATYPE_S01_PASSWORD }}
+        with:
+          cache-read-only: false
+          arguments: |
+            publish -PsigningKeyId=CDE3528F -i
