@@ -5,7 +5,7 @@ services:
     image: ${ALFRESCO_IMAGE}
     restart: unless-stopped
     ports:
-      - 8080
+      - "8080"
     environment:
       - INDEX
       - SOLR_SSL=secret
@@ -24,44 +24,38 @@ services:
   share:
     image: docker.io/xenit/alfresco-share-community:7.3
     ports:
-      - 8080
+      - "8080"
 
   solr:
     image: ${DOCKER_IMAGE}
     restart: unless-stopped
     hostname: solr
     ports:
-      - 8080:8080
-      - 8000:8000
-      - 5000:5000
+      - "8080:8080"
+      - "8000:8000"
+      - "5000:5000"
     environment:
-      - ALFRESCO_SSL=none
+      - ALFRESCO_SSL=secret
       - DEBUG=true
       - JMX_ENABLED=true
       - JAVA_XMX=1024M
-      - JAVA_OPTS_SSL=-Dalfresco.secureComms=secret -Dalfresco.secureComms.secret=mysolrsecret
-      - JAVA_OPTS_S3_ENDPOINT=-DS3_ENDPOINT=http://localstack:4566
-      - JAVA_OPTS_S3_REGION=-DS3_REGION=us-east-1
-      - JAVA_OPTS_S3_BUCKET_NAME=-DS3_BUCKET_NAME=bucket
-      - JAVA_OPTS_AWS_ACCESS_KEY_ID=-Daws.accessKeyId=access_key
-      - JAVA_OPTS_AWS_SECRET_ACCESS_KEY=-Daws.secretKey=secret_key
+      - JAVA_OPTS_SSL=-Dalfresco.secureComms.secret=mysolrsecret
+      - S3_ENDPOINT=http://localstack:4566
+      - S3_REGION=us-east-1
+      - S3_BUCKET_NAME=bucket
+      - S3_ACCESS_KEY=access_key
+      - S3_SECRET_KEY=secret_key
 
   localstack:
     container_name: localstack
-    image: localstack/localstack
+    image: localstack/localstack:2.3.2
     ports:
       - "4566:4566"
     environment:
       - SERVICES=s3
-      - DEBUG=1
-      - DATA_DIR=/tmp/localstack/data
-      - LAMBDA_EXECUTOR=docker-reuse
-      - DOCKER_HOST=unix:///var/run/docker.sock
       - AWS_ACCESS_KEY_ID=access_key
       - AWS_SECRET_ACCESS_KEY=secret_key
       - AWS_DEFAULT_REGION=us-east-1
-      - S3_BUCKET=test1
-    command: "start"
     volumes:
       - ./aws:/etc/localstack/init/ready.d
 

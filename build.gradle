@@ -11,7 +11,7 @@ def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
 
 subprojects {
     apply plugin: 'java'
-    def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.4'
+    def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.6'
     version = baseVersion[1..baseVersion.length() - 1]
 
     // It is not possible to set properties with a dot via GitHub Actions env variables, therefore we introduce support

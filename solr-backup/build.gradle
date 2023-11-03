@@ -29,6 +29,8 @@ dependencies {
 
     implementation ('com.amazonaws:aws-java-sdk-core')
     implementation ('com.amazonaws:aws-java-sdk-s3')
+    implementation("com.amazonaws:aws-java-sdk-sts")
+
 }
 
 apply from: "${rootProject.projectDir}/publish.gradle"

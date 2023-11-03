@@ -16,7 +16,6 @@
  */
 package eu.xenit.solr.backup.s3;
 
-import java.util.Locale;
 import org.apache.solr.common.util.NamedList;
 
 /**
@@ -25,66 +24,73 @@ import org.apache.solr.common.util.NamedList;
  * {@link S3BackupRepositoryConfig#toEnvVar}.
  */
 public class S3BackupRepositoryConfig {
+    public static final String S3_BUCKET_NAME = "s3.bucket.name";
+    public static final String S3_REGION = "s3.region";
+    public static final String S3_ACCESS_KEY = "s3.access.key";
+    public static final String S3_SECRET_KEY = "s3.secret.key";
+    public static final String S3_ENDPOINT = "s3.endpoint";
+    public static final String S3_PROXY_HOST = "s3.proxy.host";
+    public static final String S3_PROXY_PORT = "s3.proxy.port";
 
-  public static final String BUCKET_NAME = "s3.bucket.name";
-  public static final String REGION = "s3.region";
-  public static final String ENDPOINT = "s3.endpoint";
-  public static final String PROXY_HOST = "s3.proxy.host";
-  public static final String PROXY_PORT = "s3.proxy.port";
+    private final String bucketName;
+    private final String region;
+    private final String accessKey;
+    private final String secretKey;
+    private final String proxyHost;
+    private final int proxyPort;
+    private final String endpoint;
 
-  private final String bucketName;
-  private final String region;
-  private final String proxyHost;
-  private final int proxyPort;
-  private final String endpoint;
-
-  public S3BackupRepositoryConfig(NamedList<?> config) {
-    region = getStringConfig(config, REGION);
-    bucketName = getStringConfig(config, BUCKET_NAME);
-    proxyHost = getStringConfig(config, PROXY_HOST);
-    proxyPort = getIntConfig(config, PROXY_PORT);
-    endpoint = getStringConfig(config, ENDPOINT);
-  }
-
-  /**
-   * @return a {@link S3StorageClient} from the provided config.
-   */
-  public S3StorageClient buildClient() {
-    return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint);
-  }
-
-  private static String getStringConfig(NamedList<?> config, String property) {
-    String envProp = System.getenv().get(toEnvVar(property));
-    if (envProp == null) {
-      Object configProp = config.get(property);
-      return configProp == null ? null : configProp.toString();
-    } else {
-      return envProp;
+    public S3BackupRepositoryConfig(NamedList<?> config) {
+        region = getStringConfig(config, S3_REGION);
+        bucketName = getStringConfig(config, S3_BUCKET_NAME);
+        proxyHost = getStringConfig(config, S3_PROXY_HOST);
+        proxyPort = getIntConfig(config, S3_PROXY_PORT);
+        endpoint = getStringConfig(config, S3_ENDPOINT);
+        accessKey = getStringConfig(config, S3_ACCESS_KEY);
+        secretKey = getStringConfig(config, S3_SECRET_KEY);
     }
-  }
 
-  private static int getIntConfig(NamedList<?> config, String property) {
-    String envProp = System.getenv().get(toEnvVar(property));
-    if (envProp == null) {
-      Object configProp = config.get(property);
-      return configProp instanceof Integer ? (int) configProp : 0;
-    } else {
-      return Integer.parseInt(envProp);
+    /**
+     * @return a {@link S3StorageClient} from the provided config.
+     */
+    public S3StorageClient buildClient() {
+        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey);
     }
-  }
 
-  /** If the property as any other value than 'true' or 'TRUE', this will default to false. */
-  private static boolean getBooleanConfig(NamedList<?> config, String property) {
-    String envProp = System.getenv().get(toEnvVar(property));
-    if (envProp == null) {
-      Boolean configProp = config.getBooleanArg(property);
-      return configProp != null && configProp;
-    } else {
-      return Boolean.parseBoolean(envProp);
+    private static String getStringConfig(NamedList<?> config, String property) {
+        String envProp = System.getenv().get(toEnvVar(property));
+        if (envProp == null) {
+            Object configProp = config.get(property);
+            return configProp == null ? null : configProp.toString();
+        } else {
+            return envProp;
+        }
     }
-  }
 
-  private static String toEnvVar(String property) {
-    return property.toUpperCase(Locale.ROOT).replace('.', '_');
-  }
+    private static int getIntConfig(NamedList<?> config, String property) {
+        String envProp = System.getenv().get(toEnvVar(property));
+        if (envProp == null) {
+            Object configProp = config.get(property);
+            return configProp instanceof Integer ? (int) configProp : 0;
+        } else {
+            return Integer.parseInt(envProp);
+        }
+    }
+
+    /**
+     * If the property as any other value than 'true' or 'TRUE', this will default to false.
+     */
+    private static boolean getBooleanConfig(NamedList<?> config, String property) {
+        String envProp = System.getenv().get(toEnvVar(property));
+        if (envProp == null) {
+            Boolean configProp = config.getBooleanArg(property);
+            return configProp != null && configProp;
+        } else {
+            return Boolean.parseBoolean(envProp);
+        }
+    }
+
+    private static String toEnvVar(String property) {
+        return property.toUpperCase().replace('.', '_');
+    }
 }
