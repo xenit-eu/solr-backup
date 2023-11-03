@@ -2,8 +2,17 @@
 title: Changelog - Solr Backup
 
 # Alfresco Backup Changelog
+## v0.0.5 - 3-11-2023
 
-## Unreleased
+* OUPDAUNTLE-54 drop aws keys and use integrated env variables
+
+
+## v0.0.4 - 28-2-2023
+
+* OUPDAUNTLE-54 fix solr backup to s3
+  * drop swarm and aws specific stuff
+  * create folder on first call if they don't exist
+
 
 ## v0.0.3 - 28-09-2021
 
