@@ -22,15 +22,15 @@ package eu.xenit.solr.backup.s3;
  */
 public class S3NotFoundException extends S3Exception {
 
-  public S3NotFoundException(Throwable cause) {
-    super(cause);
-  }
+    public S3NotFoundException(Throwable cause) {
+        super(cause);
+    }
 
-  public S3NotFoundException(String message) {
-    super(message);
-  }
+    public S3NotFoundException(String message) {
+        super(message);
+    }
 
-  public S3NotFoundException(String message, Throwable cause) {
-    super(message, cause);
-  }
+    public S3NotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

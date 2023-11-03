@@ -49,7 +49,7 @@ import org.slf4j.LoggerFactory;
  */
 public class S3BackupRepository implements BackupRepository {
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private static final Logger log = LoggerFactory.getLogger(S3BackupRepository.class);
 
   private static final int CHUNK_SIZE = 16 * 1024 * 1024; // 16 MBs
   static final String S3_SCHEME = "s3";
