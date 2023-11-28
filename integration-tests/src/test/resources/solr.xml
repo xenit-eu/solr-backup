@@ -1,9 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <solr>
     <str name="adminHandler">${adminHandler:org.alfresco.solr.AlfrescoCoreAdminHandler}</str>
-
     <backup>
-        <repository name="s3" class="eu.xenit.solr.backup.s3.S3BackupRepository" default="true">
+        <repository name="s3" class="eu.xenit.solr.backup.s3.S3BackupRepository" default="false">
             <str name="s3.bucket.name">${S3_BUCKET_NAME:}</str>
             <str name="s3.endpoint">${S3_ENDPOINT:http://s3.eu-central-1.amazonaws.com}</str>
             <str name="s3.region">${S3_REGION:eu-central-1}</str>
@@ -11,6 +10,7 @@
             <str name="s3.secret.key">${S3_SECRET_KEY:}</str>
             <str name="s3.proxy.host">${S3_PROXY_HOST:}</str>
             <int name="s3.proxy.port">${S3_PROXY_PORT:0}</int>
+            <bool name="s3.path.style.access.enabled">${S3_PATH_STYLE_ACCESS_ENABLED:false}</bool>
         </repository>
     </backup>
 </solr>

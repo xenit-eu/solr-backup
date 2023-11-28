@@ -19,7 +19,6 @@ package eu.xenit.solr.backup.s3;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -55,6 +54,11 @@ public class S3BackupRepository implements BackupRepository {
   static final String S3_SCHEME = "s3";
 
   private NamedList<?> config;
+
+  public void setClient(S3StorageClient client) {
+    this.client = client;
+  }
+
   private S3StorageClient client;
 
   @Override
@@ -76,26 +80,34 @@ public class S3BackupRepository implements BackupRepository {
     return (T) this.config.get(name);
   }
 
-  @Override
-  public URI createURI(String location) {
-    if (StringUtils.isEmpty(location)) {
-      throw new IllegalArgumentException("cannot create URI with an empty location");
+    @Override
+    public URI createURI(String location) {
+        if (StringUtils.isEmpty(location)) {
+            throw new IllegalArgumentException("cannot create URI with an empty location");
+        }
+
+        try {
+          URI result = getUri(location);
+          createBackUpDirectory(result);
+            return result;
+        } catch (URISyntaxException ex) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, ex);
+        }
     }
 
-    URI result;
-    try {
-      if (location.startsWith(S3_SCHEME + ":")) {
-        result = new URI(location);
-      } else if (location.startsWith("/")) {
-        result = new URI(S3_SCHEME, null, location, null);
-      } else {
-        result = new URI(S3_SCHEME, null, "/" + location, null);
-      }
-      createBackUpDirectory(result);
-      return result;
-    } catch (URISyntaxException ex) {
-      throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, ex);
+  private URI getUri(String location) throws URISyntaxException {
+    StringBuilder locationResult = new StringBuilder();
+    if (!location.startsWith("/") && !location.startsWith(S3_SCHEME + ":")) {
+      locationResult.append("/");
     }
+    locationResult.append(location);
+    if (!location.endsWith("/")) {
+      locationResult.append("/");
+    }
+    if (location.startsWith(S3_SCHEME + ":")) {
+      return new URI(locationResult.toString());
+    }
+    return new URI(S3_SCHEME, null, locationResult.toString(), null);
   }
 
   private void createBackUpDirectory(URI result) {
