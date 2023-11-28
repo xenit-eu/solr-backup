@@ -5,11 +5,6 @@ plugins {
 description = "Xenit backup"
 group = 'eu.xenit.solr-backup'
 
-ext {
-    solrVersion = '6.6.5'
-    assVersion = '2.0.6'
-}
-
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
@@ -25,12 +20,24 @@ dependencies {
     }
     compileOnly "org.alfresco:alfresco-search:${assVersion}"
 
-    implementation platform('com.amazonaws:aws-java-sdk-bom:1.12.32')
+    implementation platform("com.amazonaws:aws-java-sdk-bom:${amazonVersion}")
 
-    implementation ('com.amazonaws:aws-java-sdk-core')
-    implementation ('com.amazonaws:aws-java-sdk-s3')
+    implementation('com.amazonaws:aws-java-sdk-core')
+    implementation('com.amazonaws:aws-java-sdk-s3')
     implementation("com.amazonaws:aws-java-sdk-sts")
+    testImplementation("org.apache.solr:solr-core:${solrVersion}") {
+        exclude group: 'org.restlet.jee' // Only available in JCenter, not essential in this project.
+    }
+    testImplementation "org.alfresco:alfresco-search:${assVersion}"
 
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:${junitJupiterVersion}"
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+
+}
+test {
+    useJUnitPlatform()
 }
 
 apply from: "${rootProject.projectDir}/publish.gradle"

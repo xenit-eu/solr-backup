@@ -85,8 +85,8 @@ class S3StorageClient {
     private final String bucketName;
 
     S3StorageClient(
-            String bucketName, String region, String proxyHost, int proxyPort, String endpoint, String accessKey, String secretKey) {
-        this(createInternalClient(region, proxyHost, proxyPort, endpoint, accessKey, secretKey), bucketName);
+            String bucketName, String region, String proxyHost, int proxyPort, String endpoint, String accessKey, String secretKey, Boolean pathStyleAccessEnabled) {
+        this(createInternalClient(region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled), bucketName);
     }
 
     @VisibleForTesting
@@ -96,7 +96,12 @@ class S3StorageClient {
     }
 
     private static AmazonS3 createInternalClient(
-            String region, String proxyHost, int proxyPort, String endpoint, String accessKey, String secretKey) {
+            String region,
+            String proxyHost,
+            int proxyPort,
+            String endpoint,
+            String accessKey,
+            String secretKey, Boolean pathStyleAccessEnabled) {
         ClientConfiguration clientConfig = new ClientConfiguration().withProtocol(Protocol.HTTPS);
         // If configured, add proxy
         if (!StringUtils.isEmpty(proxyHost)) {
@@ -124,7 +129,7 @@ class S3StorageClient {
         } else {
             clientBuilder.setRegion(region);
         }
-
+        clientBuilder.withPathStyleAccessEnabled(pathStyleAccessEnabled);
         return clientBuilder.build();
     }
 

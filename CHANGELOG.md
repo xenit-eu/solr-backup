@@ -2,6 +2,14 @@
 title: Changelog - Solr Backup
 
 # Alfresco Backup Changelog
+## v0.0.9 - 28-11-2023
+
+* DOCKER-442 fix solr backup numberToLive
+
+## v0.0.8 - 20-11-2023
+
+* DOCKER-441 improve solr backup documentation and add new env
+
 ## v0.0.5 - 3-11-2023
 
 * OUPDAUNTLE-54 drop aws keys and use integrated env variables

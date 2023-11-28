@@ -3,21 +3,10 @@ plugins {
     id 'eu.xenit.docker-compose' version '5.4.0' apply false
 }
 
-def copyPropertyValueIfExists(sourcePropertyName, targetPropertyName) {
-    if (project.hasProperty(sourcePropertyName)) {
-        project.ext[targetPropertyName] = project.property(sourcePropertyName)
-    }
-}
-
 subprojects {
     apply plugin: 'java'
     def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.6'
     version = baseVersion[1..baseVersion.length() - 1]
-
-    // It is not possible to set properties with a dot via GitHub Actions env variables, therefore we introduce support
-    // for a non-dotted-equivalent
-    copyPropertyValueIfExists('alfresco_nexus_username', 'org.alfresco.maven.nexus.username')
-    copyPropertyValueIfExists('alfresco_nexus_password', 'org.alfresco.maven.nexus.password')
 
     repositories {
         mavenCentral()

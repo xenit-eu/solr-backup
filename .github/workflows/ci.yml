@@ -3,10 +3,11 @@ on:
   push:
   workflow_dispatch:
 env:
-  ORG_GRADLE_PROJECT_alfresco_nexus_username: ${{ secrets.ALFRESCO_NEXUS_USERNAME }}
-  ORG_GRADLE_PROJECT_alfresco_nexus_password: ${{ secrets.ALFRESCO_NEXUS_PASSWORD }}
+  GRADLE_OPTS: >-
+    -Dorg.gradle.project.org.alfresco.maven.nexus.username=${{ secrets.ALFRESCO_NEXUS_USERNAME }}
+    -Dorg.gradle.project.org.alfresco.maven.nexus.password=${{ secrets.ALFRESCO_NEXUS_PASSWORD }}
 jobs:
-  integration-tests:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -15,10 +16,28 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 11
-      - name: Login to Docker
-        run: |
-          echo "${{ secrets.CLOUDSMITH_APIKEY }}" | docker login private.docker.xenit.eu --username "${{ secrets.CLOUDSMITH_USER }}" --password-stdin
-      - name: Test
+      - name: Integration test
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: false
+          arguments: test
+      - name: Upload Test Artifact
+        if: success() || failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-result
+          path: /home/runner/work/**/build/reports
+          retention-days: 2
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v1
+        with:
+          java-version: 11
+      - name: Integration test
         uses: gradle/gradle-build-action@v2
         with:
           cache-read-only: false
@@ -28,11 +47,11 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v3
         with:
-          name: test-result
+          name: integration-test-result
           path: /home/runner/work/**/build/reports
           retention-days: 2
   publish:
-    needs: [ integration-tests ]
+    needs: [ test, integration-test ]
     runs-on: ubuntu-latest
     if: ${{  startsWith(github.ref, 'refs/tags/v') }}
     steps:
@@ -53,5 +72,4 @@ jobs:
           ORG_GRADLE_PROJECT_sonatype_password: ${{ secrets.SONATYPE_S01_PASSWORD }}
         with:
           cache-read-only: false
-          arguments: |
-            publish -PsigningKeyId=CDE3528F -i
+          arguments: publish -PsigningKeyId=CDE3528F -i

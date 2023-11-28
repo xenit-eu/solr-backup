@@ -31,6 +31,7 @@ public class S3BackupRepositoryConfig {
     public static final String S3_ENDPOINT = "s3.endpoint";
     public static final String S3_PROXY_HOST = "s3.proxy.host";
     public static final String S3_PROXY_PORT = "s3.proxy.port";
+    public static final String S3_PATH_STYLE_ACCESS_ENABLED = "s3.path.style.access.enabled";
 
     private final String bucketName;
     private final String region;
@@ -39,6 +40,8 @@ public class S3BackupRepositoryConfig {
     private final String proxyHost;
     private final int proxyPort;
     private final String endpoint;
+    private final Boolean pathStyleAccessEnabled;
+
 
     public S3BackupRepositoryConfig(NamedList<?> config) {
         region = getStringConfig(config, S3_REGION);
@@ -48,13 +51,14 @@ public class S3BackupRepositoryConfig {
         endpoint = getStringConfig(config, S3_ENDPOINT);
         accessKey = getStringConfig(config, S3_ACCESS_KEY);
         secretKey = getStringConfig(config, S3_SECRET_KEY);
+        pathStyleAccessEnabled = getBooleanConfig(config, S3_PATH_STYLE_ACCESS_ENABLED);
     }
 
     /**
      * @return a {@link S3StorageClient} from the provided config.
      */
     public S3StorageClient buildClient() {
-        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey);
+        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled);
     }
 
     private static String getStringConfig(NamedList<?> config, String property) {
