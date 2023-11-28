@@ -3,6 +3,3 @@ rootProject.name = 'solr-backup'
 include ':solr-backup'
 
 include ':integration-tests'
-["solr6"].each { version ->
-    include ":integration-tests:${version}"
-}

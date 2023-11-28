@@ -20,7 +20,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           cache-read-only: false
-          arguments: test
+          arguments: test -x :integration-tests:test
       - name: Upload Test Artifact
         if: success() || failure()
         uses: actions/upload-artifact@v3
@@ -41,8 +41,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           cache-read-only: false
-          arguments: |
-            integration-tests:solr6:integrationTest
+          arguments: integration-tests:test
       - name: Upload Test Artifact
         if: success() || failure()
         uses: actions/upload-artifact@v3

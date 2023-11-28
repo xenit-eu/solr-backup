@@ -116,7 +116,6 @@ class S3StorageClient {
          */
         AmazonS3ClientBuilder clientBuilder =
                 AmazonS3ClientBuilder.standard()
-                        .enablePathStyleAccess()
                         .withClientConfiguration(clientConfig);
         if (!(StringUtils.isEmpty(accessKey) || StringUtils.isEmpty(secretKey))) {
             clientBuilder.withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(accessKey, secretKey)));

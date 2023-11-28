@@ -1,73 +1,60 @@
-plugins {
-    id 'java'
-    id 'idea'
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'eu.xenit.docker'
+apply plugin: 'eu.xenit.docker-compose.auto'
+
+ext {
+    solrVersion = '6.6.5'
+    assVersion = '2.0.6'
+    solrBaseImage = 'docker.io/xenit/alfresco-solr6-xenit:2.0.6'
+    alfrescoimage = 'docker.io/xenit/alfresco-repository-community:7.3.0'
+    flavor = 'solr6'
+}
+
+
+description = "Solr ${flavor} with backup"
+
+configurations {
+    backupJar
 }
 
 dependencies {
+    backupJar project(path: ":solr-backup")
+
     testImplementation "io.rest-assured:rest-assured:${restAssuredVersion}"
     testImplementation "io.rest-assured:json-path:${restAssuredVersion}"
     testImplementation "io.rest-assured:rest-assured-common:${restAssuredVersion}"
     testImplementation "org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}"
     testImplementation "org.junit.jupiter:junit-jupiter-params:${junitJupiterVersion}"
+    testImplementation "org.awaitility:awaitility:${awaitablityVersion}"
+
+    testImplementation platform("com.amazonaws:aws-java-sdk-bom:${amazonVersion}")
+
+    testImplementation('com.amazonaws:aws-java-sdk-core')
+    testImplementation('com.amazonaws:aws-java-sdk-s3')
+    testImplementation("com.amazonaws:aws-java-sdk-sts")
+
     testRuntimeOnly "org.glassfish.jaxb:jaxb-runtime:${jaxBVersion}"
 }
-
 test {
-    enabled = false
     useJUnitPlatform()
-    testLogging {
-        events "passed", "skipped", "failed"
+}
+
+createDockerFile {
+    from "${solrBaseImage}"
+
+    dependsOn(configurations.backupJar)
+
+    if (flavor == "solr6") {
+        smartCopy "${project.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
+        smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
     }
 }
 
-subprojects {
-    apply plugin: 'java'
-    apply plugin: 'eu.xenit.docker'
-    apply plugin: 'eu.xenit.docker-compose.auto'
-    apply from: "${project.projectDir}/overload.gradle"
-
-    description = "Solr ${flavor} with backup"
-
-    configurations {
-        amazonSdkCore
-        amazonSdkS3
-        backupJar
-    }
-
-    dependencies {
-        amazonSdkCore group: 'com.amazonaws', name: 'aws-java-sdk-core', version: '1.12.32', ext: 'jar'
-        amazonSdkS3 group: 'com.amazonaws', name: 'aws-java-sdk-s3', version: '1.12.32', ext: 'jar'
-
-        backupJar project(path: ":solr-backup")
-    }
-
-
-    task integrationTest(type: Test, group: "verification") {
-        useJUnitPlatform()
-        testClassesDirs = project.parent.sourceSets.test.output.classesDirs
-        classpath = project.parent.sourceSets.test.runtimeClasspath
-        outputs.upToDateWhen { false }
-    }
-
-
-    createDockerFile {
-        from "${solrBaseImage}"
-
-        dependsOn(configurations.backupJar)
-
-        if (flavor == "solr6") {
-            smartCopy "${project.parent.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
-            smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
-            smartCopy configurations.amazonSdkCore.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
-            smartCopy configurations.amazonSdkS3.singleFile, "/opt/alfresco-search-services/solrhome/lib/"
-        }
-    }
-
-    dockerCompose {
-        environment.put 'ALFRESCO_IMAGE', project.alfrescoimage
-        useComposeFiles = [
-                "${project.parent.projectDir}/src/test/resources/compose/docker-compose.yml"
-        ]
-        isRequiredBy(project.tasks.integrationTest)
-    }
+dockerCompose {
+    environment.put 'ALFRESCO_IMAGE', project.alfrescoimage
+    useComposeFiles = [
+            "${project.projectDir}/src/test/resources/compose/docker-compose.yml"
+    ]
+        isRequiredBy(project.tasks.test)
 }
