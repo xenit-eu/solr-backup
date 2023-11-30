@@ -48,7 +48,7 @@ class SolrBackupTest {
         s3Client = createInternalClient("us-east-1",
                 "http://localhost:4566",
                 "access_key",
-                "9access_key");
+                "secret_key");
         int solrPort = 0;
         try {
             solrPort = Integer.parseInt(System.getProperty("solr.tcp.8080", "8080"));
@@ -147,9 +147,8 @@ class SolrBackupTest {
 
 
     void validateSnapshotCount(long count) {
-        ObjectListing objectListing = s3Client.listObjects(BUCKET);
         await().atMost(180, TimeUnit.SECONDS)
-                .until(() -> objectListing
+                .until(() -> s3Client.listObjects(BUCKET)
                         .getObjectSummaries()
                         .stream()
                         .filter(s3ObjectSummary -> s3ObjectSummary.getSize() == 0
