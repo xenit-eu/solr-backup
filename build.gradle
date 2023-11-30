@@ -5,7 +5,7 @@ plugins {
 
 subprojects {
     apply plugin: 'java'
-    def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.6'
+    def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.10'
     version = baseVersion[1..baseVersion.length() - 1]
 
     repositories {

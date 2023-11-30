@@ -2,6 +2,10 @@
 title: Changelog - Solr Backup
 
 # Alfresco Backup Changelog
+## v0.0.10 - 30-11-2023
+
+* DOCKER-444 fix solr backup using filesystem instead of cache for restoring data
+
 ## v0.0.9 - 28-11-2023
 
 * DOCKER-442 fix solr backup numberToLive

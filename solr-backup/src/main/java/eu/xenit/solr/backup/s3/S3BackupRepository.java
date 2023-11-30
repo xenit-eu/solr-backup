@@ -373,7 +373,7 @@ public class S3BackupRepository implements BackupRepository {
     }
 
     try (InputStream inputStream = client.pullStream(s3Path);
-        IndexOutput indexOutput = dest.createOutput(destFileName, IOContext.DEFAULT)) {
+        IndexOutput indexOutput = dest.createOutput(destFileName, DirectoryFactory.IOCONTEXT_NO_CACHE)) {
       byte[] buffer = new byte[CHUNK_SIZE];
       int len;
       while ((len = inputStream.read(buffer)) != -1) {
