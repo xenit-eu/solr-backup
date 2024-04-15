@@ -1,5 +1,15 @@
+plugins {
+    id "org.ajoberstar.reckon.settings" version "${reckonPluginVersion}"
+}
 rootProject.name = 'solr-backup'
 
 include ':solr-backup'
 
 include ':integration-tests'
+
+reckon {
+    defaultInferredScope = 'patch'
+    snapshots()
+    scopeCalc = calcScopeFromProp()
+    stageCalc = calcStageFromProp()
+}

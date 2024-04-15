@@ -1,12 +1,11 @@
 plugins {
-    id 'eu.xenit.docker' version '5.4.0' apply false
-    id 'eu.xenit.docker-compose' version '5.4.0' apply false
+    id 'eu.xenit.docker' version "${dockerPluginVersion}" apply false
+    id 'eu.xenit.docker-compose' version "${dockerPluginVersion}" apply false
 }
 
 subprojects {
     apply plugin: 'java'
-    def baseVersion = System.getenv("TAG_VERSION") ?: 'v0.0.10'
-    version = baseVersion[1..baseVersion.length() - 1]
+    version = rootProject.version.toString()
 
     repositories {
         mavenCentral()
