@@ -310,7 +310,7 @@ class S3StorageClient {
 
                 return !StringUtils.isEmpty(contentType) && (contentType.equalsIgnoreCase(S3_DIR_CONTENT_TYPE));
             } catch (AmazonClientException e) {
-                log.error("Could not get back {} from S3, tried both as a folder and as a file", path);
+                log.info("Could not get back {} from S3, tried both as a folder and as a file", path,e);
                 return false;
             }
         }

@@ -1,6 +1,10 @@
 name: build
 on:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
   workflow_dispatch:
 env:
   GRADLE_OPTS: >-
@@ -16,7 +20,7 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 11
-      - name: Integration test
+      - name: Test
         uses: gradle/gradle-build-action@v2
         with:
           cache-read-only: false
@@ -52,7 +56,7 @@ jobs:
   publish:
     needs: [ test, integration-test ]
     runs-on: ubuntu-latest
-    if: ${{  startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/heads/master') || startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -60,8 +64,6 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: 11
-      - name: Add TAG_VERSION env property
-        run: echo "TAG_VERSION=`echo ${GITHUB_REF#refs/tags/}`" >> $GITHUB_ENV
       - name: Publish
         uses: gradle/gradle-build-action@v2
         env:
