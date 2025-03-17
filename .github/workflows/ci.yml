@@ -27,7 +27,7 @@ jobs:
           arguments: test -x :integration-tests:test
       - name: Upload Test Artifact
         if: success() || failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-result
           path: /home/runner/work/**/build/reports
@@ -48,7 +48,7 @@ jobs:
           arguments: integration-tests:test
       - name: Upload Test Artifact
         if: success() || failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: integration-test-result
           path: /home/runner/work/**/build/reports
