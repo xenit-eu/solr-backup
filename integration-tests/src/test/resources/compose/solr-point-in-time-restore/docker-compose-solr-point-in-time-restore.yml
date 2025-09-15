@@ -1,0 +1,28 @@
+services:
+  solr-point-in-time-restore:
+    image: "${DOCKER_IMAGE:local}"
+    restart: unless-stopped
+    hostname: solr-point-in-time-restore
+    networks:
+      - solr-backup-local-network
+    ports:
+      - "8081:8080"
+      - "8001:8000"
+    environment:
+      - ALFRESCO_SSL=secret
+      - DEBUG=true
+      - JMX_ENABLED=true
+      - JAVA_XMX=1024M
+      - ALFRESCO_SECRET=mysolrsecret
+      - S3_ENDPOINT=http://localstack:4566
+      - S3_REGION=us-east-1
+      - S3_BUCKET_NAME=bucket
+      - S3_ACCESS_KEY=access_key
+      - S3_SECRET_KEY=secret_key
+      - S3_PATH_STYLE_ACCESS_ENABLED=true
+      - RESTORE_FROM_BACKUP=true
+      - RESTORE_BACKUP_NAME='snapshot.my-test-name-1'
+      - RESTORE_BACKUP_PATH='opt/alfresco-search-services/data/solr6Backup/alfresco'
+networks:
+  solr-backup-local-network:
+    external: true

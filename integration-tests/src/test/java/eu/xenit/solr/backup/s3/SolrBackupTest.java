@@ -7,7 +7,6 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectListing;
 import groovy.util.logging.Slf4j;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -15,11 +14,7 @@ import io.restassured.parsing.Parser;
 import io.restassured.specification.RequestSpecification;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.*;
 
 import java.util.concurrent.TimeUnit;
 
@@ -34,12 +29,14 @@ class SolrBackupTest {
     private static final Log log = LogFactory.getLog(SolrBackupTest.class);
     static RequestSpecification spec;
     static RequestSpecification specBackup;
+    static RequestSpecification specBackup2;
+    static RequestSpecification specBackup3;
     static RequestSpecification specBackupDetails;
     static RequestSpecification specRestore;
     static RequestSpecification specRestoreStatus;
+    static RequestSpecification specRestorePointInTimeStatus;
     static AmazonS3 s3Client;
     static final String BUCKET = "bucket";
-
     @BeforeEach
     public void setup() {
         String basePathSolr = "solr/alfresco";
@@ -75,6 +72,25 @@ class SolrBackupTest {
                 .addParam("numberToKeep", "2")
                 .addParam("wt", "json")
                 .build();
+        specBackup2 = new RequestSpecBuilder()
+                .setBaseUri(baseURISolr)
+                .setPort(solrPort)
+                .setBasePath(basePathSolrBackup)
+                .addParam("command", "backup")
+                .addParam("repository", "s3")
+                .addParam("numberToKeep", "2")
+                .addParam("name", "my-test-name-1")
+                .addParam("wt", "json")
+                .build();
+        specBackup3 = new RequestSpecBuilder()
+                .setBaseUri(baseURISolr)
+                .setPort(solrPort)
+                .setBasePath(basePathSolrBackup)
+                .addParam("command", "backup")
+                .addParam("repository", "s3")
+                .addParam("numberToKeep", "2")
+                .addParam("wt", "json")
+                .build();
         specBackupDetails = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
                 .setPort(solrPort)
@@ -96,7 +112,14 @@ class SolrBackupTest {
                 .addParam("command", "restorestatus")
                 .addParam("wt", "json")
                 .build();
-
+        //        s3:/opt/alfresco-search-services/data/solr6Backup/alfresco/snapshot.my-test-name-0
+        specRestorePointInTimeStatus = new RequestSpecBuilder()
+                .setBaseUri(baseURISolr)
+                .setPort(8081)
+                .setBasePath(basePathSolrBackup)
+                .addParam("command", "restorestatus")
+                .addParam("wt", "json")
+                .build();
 
         // wait for solr to track
         try {
@@ -106,6 +129,36 @@ class SolrBackupTest {
         }
     }
 
+    //    Startup new SOLR container and check if we can fetch the S3 backups for point-in-time restore...
+//    @Test
+//    @Order(3)
+//    void testRestorePointInTimeScriptEndpoint() {
+//        // In docker-solr the restore-from-backup script runs automatically if env:
+//        // RESTORE_FROM_BACKUP = true
+//        // RESTORE_BACKUP_NAME = 'Backup filename'
+//        // RESTORE_BACKUP_PATH = 'Backup file path to file'
+//        // If RESTORE_FROM_BACKUP = true and the rest is not set, auto-restore to latest made snapshot is set.
+//
+//        // start a new solr container with the above env variables...
+//
+//        // After it startsup check if restore was succesfull
+//        // Restore is run via startup script in container.
+//        System.out.println("Restore triggered at solr-startup after health-check succeeded, will wait maximum 3 minutes");
+//        long startTime = System.currentTimeMillis();
+//        await().atMost(180, TimeUnit.SECONDS)
+//                .pollInterval(1, TimeUnit.SECONDS).until(() -> {
+//                    String status = given()
+//                            .spec(specRestorePointInTimeStatus)
+//                            .when()
+//                            .get()
+//                            .then()
+//                            .statusCode(200)
+//                            .extract()
+//                            .path("restorestatus.status");
+//                    System.out.println("elapsed = " + (System.currentTimeMillis() - startTime) + "with status= " + status);
+//                    return "success".equals(status);
+//                });
+//    }
 
     @Test
     @Order(2)
@@ -137,16 +190,20 @@ class SolrBackupTest {
     @Order(1)
     void testBackupWithNumberToLiveEndpoint() {
         validateSnapshotCount(0);
-        callBackupEndpoint(1);
+        callBackupEndpoint(1, specBackup);
+
         validateSnapshotCount(1);
-        callBackupEndpoint(2);
+        callBackupEndpoint(2, specBackup);
+
         validateSnapshotCount(2);
-        callBackupEndpoint(3);
+        callBackupEndpoint(3, specBackup);
         validateSnapshotCount(2);
+        callBackupEndpoint(4, specBackup2);
     }
 
 
     void validateSnapshotCount(long count) {
+        System.out.println("validateSnapshotCount count: " + count + ", ");
         await().atMost(180, TimeUnit.SECONDS)
                 .until(() -> s3Client.listObjects(BUCKET)
                         .getObjectSummaries()
@@ -156,10 +213,7 @@ class SolrBackupTest {
                         .count() == count);
 
     }
-    private void callBackupEndpoint() {
-        callBackupEndpoint(0);
-    }
-    private void callBackupEndpoint(int count) {
+    private void callBackupEndpoint(int count, RequestSpecification specBackup) {
         String status = given()
                 .spec(specBackup)
                 .when()

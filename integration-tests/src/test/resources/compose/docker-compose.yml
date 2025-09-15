@@ -1,8 +1,10 @@
-version: '3.8'
+#version: '3.8'
 
 services:
   alfresco:
-    image: ${ALFRESCO_IMAGE}
+    image: "${ALFRESCO_IMAGE:-local}"
+    networks:
+      - solr-backup-local-network
     restart: unless-stopped
     ports:
       - "8080"
@@ -15,6 +17,8 @@ services:
 
   postgresql:
     image: docker.io/xenit/postgres
+    networks:
+      - solr-backup-local-network
     environment:
       - POSTGRES_USER=alfresco
       - POSTGRES_PASSWORD=admin
@@ -23,16 +27,22 @@ services:
 
   share:
     image: docker.io/xenit/alfresco-share-community:7.3
+    networks:
+      - solr-backup-local-network
     ports:
       - "8080"
 
   solr:
-    image: ${DOCKER_IMAGE}
+    image: "${DOCKER_IMAGE:-local}"
     restart: unless-stopped
     hostname: solr
+    networks:
+      - solr-backup-local-network
     ports:
       - "8080:8080"
       - "8000:8000"
+    volumes:
+      - ./solr_backups:/var/solr/data/backups
     environment:
       - ALFRESCO_SSL=secret
       - DEBUG=true
@@ -49,6 +59,8 @@ services:
   localstack:
     container_name: localstack
     image: localstack/localstack:2.3.2
+    networks:
+      - solr-backup-local-network
     ports:
       - "4566:4566"
     environment:
@@ -59,4 +71,7 @@ services:
     volumes:
       - ./aws:/etc/localstack/init/ready.d
 
+networks:
+  solr-backup-local-network:
+    driver: bridge
 
