@@ -29,8 +29,6 @@ class SolrBackupTest {
     private static final Log log = LogFactory.getLog(SolrBackupTest.class);
     static RequestSpecification spec;
     static RequestSpecification specBackup;
-    static RequestSpecification specBackup2;
-    static RequestSpecification specBackup3;
     static RequestSpecification specBackupDetails;
     static RequestSpecification specRestore;
     static RequestSpecification specRestoreStatus;
@@ -72,25 +70,6 @@ class SolrBackupTest {
                 .addParam("numberToKeep", "2")
                 .addParam("wt", "json")
                 .build();
-        specBackup2 = new RequestSpecBuilder()
-                .setBaseUri(baseURISolr)
-                .setPort(solrPort)
-                .setBasePath(basePathSolrBackup)
-                .addParam("command", "backup")
-                .addParam("repository", "s3")
-                .addParam("numberToKeep", "2")
-                .addParam("name", "my-test-name-1")
-                .addParam("wt", "json")
-                .build();
-        specBackup3 = new RequestSpecBuilder()
-                .setBaseUri(baseURISolr)
-                .setPort(solrPort)
-                .setBasePath(basePathSolrBackup)
-                .addParam("command", "backup")
-                .addParam("repository", "s3")
-                .addParam("numberToKeep", "2")
-                .addParam("wt", "json")
-                .build();
         specBackupDetails = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
                 .setPort(solrPort)
@@ -112,7 +91,6 @@ class SolrBackupTest {
                 .addParam("command", "restorestatus")
                 .addParam("wt", "json")
                 .build();
-        //        s3:/opt/alfresco-search-services/data/solr6Backup/alfresco/snapshot.my-test-name-0
         specRestorePointInTimeStatus = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
                 .setPort(8081)
@@ -129,12 +107,9 @@ class SolrBackupTest {
         }
     }
 
-    //    Startup new SOLR container and check if we can fetch the S3 backups for point-in-time restore...
     @Test
     @Order(3)
     void testRestorePointInTimeScriptEndpoint() {
-        // After it startsup check if restore was succesfull
-        // Restore is run via startup script in container.
         System.out.println("Restore triggered at solr-startup after health-check succeeded, will wait maximum 3 minutes");
         long startTime = System.currentTimeMillis();
         await().atMost(180, TimeUnit.SECONDS)
@@ -190,12 +165,10 @@ class SolrBackupTest {
         validateSnapshotCount(2);
         callBackupEndpoint(3, specBackup);
         validateSnapshotCount(2);
-//        callBackupEndpoint(4, specBackup2);
     }
 
 
     void validateSnapshotCount(long count) {
-        System.out.println("validateSnapshotCount count: " + count + ", ");
         await().atMost(180, TimeUnit.SECONDS)
                 .until(() -> s3Client.listObjects(BUCKET)
                         .getObjectSummaries()
