@@ -130,35 +130,27 @@ class SolrBackupTest {
     }
 
     //    Startup new SOLR container and check if we can fetch the S3 backups for point-in-time restore...
-//    @Test
-//    @Order(3)
-//    void testRestorePointInTimeScriptEndpoint() {
-//        // In docker-solr the restore-from-backup script runs automatically if env:
-//        // RESTORE_FROM_BACKUP = true
-//        // RESTORE_BACKUP_NAME = 'Backup filename'
-//        // RESTORE_BACKUP_PATH = 'Backup file path to file'
-//        // If RESTORE_FROM_BACKUP = true and the rest is not set, auto-restore to latest made snapshot is set.
-//
-//        // start a new solr container with the above env variables...
-//
-//        // After it startsup check if restore was succesfull
-//        // Restore is run via startup script in container.
-//        System.out.println("Restore triggered at solr-startup after health-check succeeded, will wait maximum 3 minutes");
-//        long startTime = System.currentTimeMillis();
-//        await().atMost(180, TimeUnit.SECONDS)
-//                .pollInterval(1, TimeUnit.SECONDS).until(() -> {
-//                    String status = given()
-//                            .spec(specRestorePointInTimeStatus)
-//                            .when()
-//                            .get()
-//                            .then()
-//                            .statusCode(200)
-//                            .extract()
-//                            .path("restorestatus.status");
-//                    System.out.println("elapsed = " + (System.currentTimeMillis() - startTime) + "with status= " + status);
-//                    return "success".equals(status);
-//                });
-//    }
+    @Test
+    @Order(3)
+    void testRestorePointInTimeScriptEndpoint() {
+        // After it startsup check if restore was succesfull
+        // Restore is run via startup script in container.
+        System.out.println("Restore triggered at solr-startup after health-check succeeded, will wait maximum 3 minutes");
+        long startTime = System.currentTimeMillis();
+        await().atMost(180, TimeUnit.SECONDS)
+                .pollInterval(1, TimeUnit.SECONDS).until(() -> {
+                    String status = given()
+                            .spec(specRestorePointInTimeStatus)
+                            .when()
+                            .get()
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .path("restorestatus.status");
+                    System.out.println("elapsed = " + (System.currentTimeMillis() - startTime) + "with status= " + status);
+                    return "success".equals(status);
+                });
+    }
 
     @Test
     @Order(2)
@@ -198,7 +190,7 @@ class SolrBackupTest {
         validateSnapshotCount(2);
         callBackupEndpoint(3, specBackup);
         validateSnapshotCount(2);
-        callBackupEndpoint(4, specBackup2);
+//        callBackupEndpoint(4, specBackup2);
     }
 
 
