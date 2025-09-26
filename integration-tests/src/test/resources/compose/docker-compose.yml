@@ -74,8 +74,8 @@ services:
       - S3_SECRET_KEY=secret_key
       - S3_PATH_STYLE_ACCESS_ENABLED=true
       - RESTORE_FROM_BACKUP=true
-      - RESTORE_BACKUP_NAME='snapshot.my-test-name-1'
-      - RESTORE_BACKUP_PATH='opt/alfresco-search-services/data/solr6Backup/alfresco'
+      - RESTORE_BACKUP_NAME=snapshot.my-test-name-1
+      - RESTORE_BACKUP_PATH=bucket
   localstack:
     container_name: localstack
     image: localstack/localstack:2.3.2
