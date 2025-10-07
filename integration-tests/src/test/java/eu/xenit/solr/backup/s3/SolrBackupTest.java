@@ -93,12 +93,13 @@ class SolrBackupTest {
                 .build();
         restoreFixedSnapshotRequestSpec = new RequestSpecBuilder()
                 .setBaseUri(baseURISolr)
-                .setPort(8081)
+                .setPort(solrPort)
                 .setBasePath(basePathSolrBackup)
-                .addParam("command", "restorestatus")
-                .addParam("wt", "json")
+                .addParam("command", "restore")
+                .addParam("repository", "s3")
+                .addParam("location", "bucket")
+                .addParam("name", "my-alfresco-backup-20251006")
                 .build();
-
         // wait for solr to track
         try {
             sleep(30000);
@@ -111,11 +112,23 @@ class SolrBackupTest {
     @Order(3)
     void testRestorePointInTimeScriptEndpoint() {
         System.out.println("Restore triggered at solr-startup after health-check succeeded, will wait maximum 3 minutes");
+        // Check logs for restore at startup... (Solr doesnt remember by the time we reach our test).
+        // Retrigger a restore from the backup
+        String responseBody = given()
+                .spec(restoreFixedSnapshotRequestSpec)
+                .when()
+                .get()
+                .then()
+                .statusCode(200)
+                .extract()
+                .body() // Extract the whole body
+                .asString(); // as a simple string
+        System.out.println("RAW RESPONSE: " + responseBody); // Print it!
         long startTime = System.currentTimeMillis();
-        await().atMost(360, TimeUnit.SECONDS)
+        await().atMost(180, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS).until(() -> {
                     String status = given()
-                            .spec(restoreFixedSnapshotRequestSpec)
+                            .spec(restoreStatusRequestSpec)
                             .when()
                             .get()
                             .then()
