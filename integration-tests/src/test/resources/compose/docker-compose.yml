@@ -1,8 +1,8 @@
-version: '3.8'
-
 services:
   alfresco:
-    image: ${ALFRESCO_IMAGE}
+    image: "${ALFRESCO_IMAGE:-local}"
+    networks:
+      - solr-backup-local-network
     restart: unless-stopped
     ports:
       - "8080"
@@ -12,9 +12,10 @@ services:
       - GLOBAL_local.transform.service.enabled=false
       - GLOBAL_solr.sharedSecret=mysolrsecret
       - JAVA_XMX=2048M
-
   postgresql:
     image: docker.io/xenit/postgres
+    networks:
+      - solr-backup-local-network
     environment:
       - POSTGRES_USER=alfresco
       - POSTGRES_PASSWORD=admin
@@ -23,13 +24,17 @@ services:
 
   share:
     image: docker.io/xenit/alfresco-share-community:7.3
+    networks:
+      - solr-backup-local-network
     ports:
       - "8080"
 
   solr:
-    image: ${DOCKER_IMAGE}
+    image: "${DOCKER_IMAGE:-local}"
     restart: unless-stopped
     hostname: solr
+    networks:
+      - solr-backup-local-network
     ports:
       - "8080:8080"
       - "8000:8000"
@@ -45,10 +50,35 @@ services:
       - S3_ACCESS_KEY=access_key
       - S3_SECRET_KEY=secret_key
       - S3_PATH_STYLE_ACCESS_ENABLED=true
-
+#  solr-fixed-snapshot-restore:
+#    image: "${DOCKER_IMAGE:-local}"
+#    restart: unless-stopped
+#    hostname: solr-fixed-snapshot-restore
+#    networks:
+#      - solr-backup-local-network
+#    ports:
+#      - "8081:8080"
+#      - "8001:8000"
+#    environment:
+#      - ALFRESCO_SSL=secret
+#      - DEBUG=true
+#      - JMX_ENABLED=true
+#      - JAVA_XMX=1024M
+#      - ALFRESCO_SECRET=mysolrsecret
+#      - S3_ENDPOINT=http://localstack:4566
+#      - S3_REGION=us-east-1
+#      - S3_BUCKET_NAME=bucket
+#      - S3_ACCESS_KEY=access_key
+#      - S3_SECRET_KEY=secret_key
+#      - S3_PATH_STYLE_ACCESS_ENABLED=true
+#      - RESTORE_FROM_BACKUP=true
+#      - RESTORE_BACKUP_NAME=my-alfresco-backup-20251006
+#      - RESTORE_BACKUP_PATH=bucket
   localstack:
     container_name: localstack
     image: localstack/localstack:2.3.2
+    networks:
+      - solr-backup-local-network
     ports:
       - "4566:4566"
     environment:
@@ -58,5 +88,7 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
     volumes:
       - ./aws:/etc/localstack/init/ready.d
-
-
+      - ./solr-snapshot:/backups
+networks:
+  solr-backup-local-network:
+    driver: bridge

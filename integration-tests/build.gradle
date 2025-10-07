@@ -46,6 +46,12 @@ createDockerFile {
     dependsOn(configurations.backupJar)
 
     if (flavor == "solr6") {
+        // Remove the old imported solr-backup from docker-solr:
+        // Resolves DOUBLE library issues!
+        runCommand 'rm /opt/alfresco-search-services/solrhome/lib/solr-backup-0.0.11.jar'
+        runCommand 'rm /opt/alfresco-search-services/solrhome/lib/aws-java-sdk*'
+        runCommand 'rm /opt/alfresco-search-services/solrhome/lib/jackson-*'
+
         smartCopy "${project.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
         smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
     }
