@@ -20,6 +20,7 @@ import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 
@@ -146,7 +147,7 @@ class SolrBackupTest {
         callBackupEndpoint(2);
         validateSnapshotCount(2);
         callBackupEndpoint(3);
-        validateSnapshotCount(2);
+        validateSnapshotCount(2); // ??????????????
     }
 
 
@@ -162,6 +163,9 @@ class SolrBackupTest {
                                 .build())
                         .contents()
                         .stream()
+                        .peek(s3Object -> System.out.println(
+                                "Found S3 object: key=" + s3Object.key() + ", size=" + s3Object.size()
+                        ))
                         .filter(s3Object -> s3Object.size() == 0
                                 && s3Object.key().contains("snapshot"))
                         .count() == count);
@@ -194,6 +198,7 @@ class SolrBackupTest {
                             .statusCode(200)
                             .extract()
                             .path("details.backup");
+                    if (backup != null) System.out.println("Found backup object: %s".formatted(backup));
                     System.out.println("elapsed = " + (System.currentTimeMillis() - startTime));
                     return backup != null;
                 });
@@ -204,8 +209,13 @@ class SolrBackupTest {
         // SDK v2 Migration: Removed explicit protocol setting, as it's inferred from the endpoint URI.
         ClientOverrideConfiguration clientConfig = ClientOverrideConfiguration.builder().build();
 
+        S3Configuration configuration = S3Configuration.builder()
+                .checksumValidationEnabled(false)
+                .build();
+
         S3ClientBuilder clientBuilder = S3Client.builder()
-                .httpClientBuilder(ApacheHttpClient.builder()).overrideConfiguration(clientConfig);
+                .httpClientBuilder(ApacheHttpClient.builder()).overrideConfiguration(clientConfig)
+                .serviceConfiguration(configuration);
         clientBuilder.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
 
         /*

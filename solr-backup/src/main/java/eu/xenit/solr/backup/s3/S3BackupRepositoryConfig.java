@@ -16,6 +16,7 @@
  */
 package eu.xenit.solr.backup.s3;
 
+import lombok.Getter;
 import org.apache.solr.common.util.NamedList;
 
 import java.net.URISyntaxException;
@@ -26,41 +27,56 @@ import java.net.URISyntaxException;
  * {@link S3BackupRepositoryConfig#toEnvVar}.
  */
 public class S3BackupRepositoryConfig {
+    // RENAMED for clarity and v2 alignment
     public static final String S3_BUCKET_NAME = "s3.bucket.name";
-    public static final String S3_REGION = "s3.region";
-    public static final String S3_ACCESS_KEY = "s3.access.key";
-    public static final String S3_SECRET_KEY = "s3.secret.key";
-    public static final String S3_ENDPOINT = "s3.endpoint";
+    public static final String S3_CLIENT_REGION = "s3.client.region";
+    public static final String S3_CLIENT_ACCESS_KEY = "s3.client.accessKey";
+    public static final String S3_CLIENT_SECRET_KEY = "s3.client.secretKey";
+    // RENAMED: This is now the endpoint *override*, a key v2 concept
+    public static final String S3_CLIENT_ENDPOINT_OVERRIDE = "s3.client.endpointOverride";
+    // RENAMED: This corresponds to the v2 setting name
+    public static final String S3_CLIENT_FORCE_PATH_STYLE = "s3.client.forcePathStyle";
+    public static final String S3_CLIENT_CHECKSUM_VALIDATION_ENABLED = "s3.client.checksumValidationEnabled";
     public static final String S3_PROXY_HOST = "s3.proxy.host";
     public static final String S3_PROXY_PORT = "s3.proxy.port";
-    public static final String S3_PATH_STYLE_ACCESS_ENABLED = "s3.path.style.access.enabled";
 
+    @Getter
     private final String bucketName;
+    @Getter
     private final String region;
+    @Getter
     private final String accessKey;
+    @Getter
     private final String secretKey;
+    @Getter
     private final String proxyHost;
+    @Getter
     private final int proxyPort;
+    @Getter
     private final String endpoint;
+    @Getter
     private final Boolean pathStyleAccessEnabled;
+    @Getter
+    private final Boolean checksumValidationEnabled;
 
 
     public S3BackupRepositoryConfig(NamedList<?> config) {
-        region = getStringConfig(config, S3_REGION);
+        region = getStringConfig(config, S3_CLIENT_REGION);
         bucketName = getStringConfig(config, S3_BUCKET_NAME);
         proxyHost = getStringConfig(config, S3_PROXY_HOST);
         proxyPort = getIntConfig(config, S3_PROXY_PORT);
-        endpoint = getStringConfig(config, S3_ENDPOINT);
-        accessKey = getStringConfig(config, S3_ACCESS_KEY);
-        secretKey = getStringConfig(config, S3_SECRET_KEY);
-        pathStyleAccessEnabled = getBooleanConfig(config, S3_PATH_STYLE_ACCESS_ENABLED);
+        endpoint = getStringConfig(config, S3_CLIENT_ENDPOINT_OVERRIDE);
+        accessKey = getStringConfig(config, S3_CLIENT_ACCESS_KEY);
+        secretKey = getStringConfig(config, S3_CLIENT_SECRET_KEY);
+        pathStyleAccessEnabled = getBooleanConfig(config, S3_CLIENT_FORCE_PATH_STYLE);
+        checksumValidationEnabled = getBooleanConfig(config, S3_CLIENT_CHECKSUM_VALIDATION_ENABLED);
     }
 
     /**
      * @return a {@link S3StorageClient} from the provided config.
      */
     public S3StorageClient buildClient() throws URISyntaxException {
-        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled);
+        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled, checksumValidationEnabled);
     }
 
     private static String getStringConfig(NamedList<?> config, String property) {

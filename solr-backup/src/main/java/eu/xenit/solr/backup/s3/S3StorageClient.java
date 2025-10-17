@@ -35,6 +35,7 @@ import software.amazon.awssdk.http.apache.ProxyConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
@@ -98,8 +99,8 @@ class S3StorageClient {
     private final String bucketName;
 
     S3StorageClient(
-            String bucketName, String region, String proxyHost, int proxyPort, String endpoint, String accessKey, String secretKey, Boolean pathStyleAccessEnabled) throws URISyntaxException {
-        this(createInternalClient(region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled), bucketName);
+            String bucketName, String region, String proxyHost, int proxyPort, String endpoint, String accessKey, String secretKey, Boolean pathStyleAccessEnabled, Boolean checksumValidationEnabled) throws URISyntaxException {
+        this(createInternalClient(region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled, checksumValidationEnabled), bucketName);
     }
 
     @VisibleForTesting
@@ -114,9 +115,15 @@ class S3StorageClient {
             int proxyPort,
             String endpoint,
             String accessKey,
-            String secretKey, Boolean pathStyleAccessEnabled) throws URISyntaxException {
+            String secretKey, Boolean pathStyleAccessEnabled,
+            Boolean checksumValidationEnabled) throws URISyntaxException {
 
         S3ClientBuilder clientBuilder = S3Client.builder();
+
+        S3Configuration configuration = S3Configuration.builder()
+                .checksumValidationEnabled(checksumValidationEnabled)
+                .build();
+        clientBuilder.serviceConfiguration(configuration);
 
         /*
          * SDK v2 Migration: Proxy settings are now configured on the HTTP client,

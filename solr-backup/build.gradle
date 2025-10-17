@@ -22,6 +22,10 @@ dependencies {
 
     implementation platform("software.amazon.awssdk:bom:2.35.7")
 
+    implementation('ch.qos.logback:logback-classic:1.4.14')
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+
     implementation('software.amazon.awssdk:aws-core')
     implementation('software.amazon.awssdk:s3')
     implementation("software.amazon.awssdk:sts")
