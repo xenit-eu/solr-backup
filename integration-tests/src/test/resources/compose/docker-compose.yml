@@ -57,6 +57,6 @@ services:
       - AWS_SECRET_ACCESS_KEY=secret_key
       - AWS_DEFAULT_REGION=us-east-1
     volumes:
-      - ./aws:/etc/localstack/init/ready.d
+      - ./aws:/etc/localstack/init/ready.d:r,Z
 
 

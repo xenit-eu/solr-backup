@@ -18,6 +18,8 @@ package eu.xenit.solr.backup.s3;
 
 import org.apache.solr.common.util.NamedList;
 
+import java.net.URISyntaxException;
+
 /**
  * Class representing the {@code backup} S3 config bundle specified in solr.xml. All user-provided
  * config can be overridden via environment variables (use uppercase, with '_' instead of '.'), see
@@ -57,7 +59,7 @@ public class S3BackupRepositoryConfig {
     /**
      * @return a {@link S3StorageClient} from the provided config.
      */
-    public S3StorageClient buildClient() {
+    public S3StorageClient buildClient() throws URISyntaxException {
         return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled);
     }
 

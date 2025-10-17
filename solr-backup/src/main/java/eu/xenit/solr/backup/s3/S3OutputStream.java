@@ -16,18 +16,19 @@
  */
 package eu.xenit.solr.backup.s3;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.event.ProgressEvent;
-import com.amazonaws.event.SyncProgressListener;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -52,21 +53,23 @@ public class S3OutputStream extends OutputStream {
     static final int PART_SIZE = 16777216;
     static final int MIN_PART_SIZE = 5242880;
 
-    private final AmazonS3 s3Client;
+    private final S3Client s3Client;
     private final String bucketName;
     private final String key;
-    private final SyncProgressListener progressListener;
+    // TODO: upgrade from 1.x sdk
+    // private final SyncProgressListener progressListener;
     private volatile boolean closed;
     private final ByteBuffer buffer;
     private MultipartUpload multiPartUpload;
 
-    public S3OutputStream(AmazonS3 s3Client, String key, String bucketName) {
+    public S3OutputStream(S3Client s3Client, String key, String bucketName) {
         this.s3Client = s3Client;
         this.bucketName = bucketName;
         this.key = key;
         this.closed = false;
         this.buffer = ByteBuffer.allocate(PART_SIZE);
-        this.progressListener = new ConnectProgressListener();
+        // TODO: upgrade from 1.x sdk
+        //this.progressListener = new ConnectProgressListener();
         this.multiPartUpload = null;
 
         if (log.isDebugEnabled()) {
@@ -135,7 +138,7 @@ public class S3OutputStream extends OutputStream {
             multiPartUpload = newMultipartUpload();
         }
         try {
-            multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size, isLastPart);
+            multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
         } catch (Exception e) {
             if (multiPartUpload != null) {
                 multiPartUpload.abort();
@@ -181,28 +184,31 @@ public class S3OutputStream extends OutputStream {
     }
 
     private MultipartUpload newMultipartUpload() throws IOException {
-        InitiateMultipartUploadRequest initRequest =
-                new InitiateMultipartUploadRequest(bucketName, key, new ObjectMetadata());
-
+        CreateMultipartUploadRequest initRequest =
+                CreateMultipartUploadRequest.builder()
+                        .bucket(bucketName)
+                        .key(key)
+                        .build();
         try {
-            return new MultipartUpload(s3Client.initiateMultipartUpload(initRequest).getUploadId());
-        } catch (AmazonClientException e) {
+            return new MultipartUpload(s3Client.createMultipartUpload(initRequest).uploadId());
+        } catch (SdkException e) {
             throw S3StorageClient.handleAmazonException(e);
         }
     }
 
+    // TODO: upgrade from 1.x sdk
     // Placeholder listener for now, just logs the event progress.
-    private static class ConnectProgressListener extends SyncProgressListener {
+    /*private static class ConnectProgressListener extends TransferListener {
         public void progressChanged(ProgressEvent progressEvent) {
             if (log.isDebugEnabled()) {
                 log.debug("Progress event {}", progressEvent);
             }
         }
-    }
+    }*/
 
     private class MultipartUpload {
         private final String uploadId;
-        private final List<PartETag> partETags;
+        private final List<CompletedPart> partETags;
 
         public MultipartUpload(String uploadId) {
             this.uploadId = uploadId;
@@ -216,24 +222,34 @@ public class S3OutputStream extends OutputStream {
             }
         }
 
-        void uploadPart(ByteArrayInputStream inputStream, int partSize, boolean isLastPart) {
+        void uploadPart(ByteArrayInputStream inputStream, int partSize) {
             int currentPartNumber = partETags.size() + 1;
 
+            /*
+             * SDK v2 Migration:
+             * - Use RequestBody.fromInputStream to stream data.
+             * - The partSize is now a parameter of RequestBody.fromInputStream.
+             * - Removed non-existent builder methods: `inputStream`, `partSize`, `lastPart`, `generalProgressListener`.
+             * - Pass `contentLength` to request
+             */
             UploadPartRequest request =
-                    new UploadPartRequest()
-                            .withKey(key)
-                            .withBucketName(bucketName)
-                            .withUploadId(uploadId)
-                            .withInputStream(inputStream)
-                            .withPartNumber(currentPartNumber)
-                            .withPartSize(partSize)
-                            .withLastPart(isLastPart)
-                            .withGeneralProgressListener(progressListener);
-
+                    UploadPartRequest.builder()
+                            .bucket(bucketName)
+                            .key(key)
+                            .uploadId(uploadId)
+                            .partNumber(currentPartNumber)
+                            .contentLength((long) partSize)
+                            .build();
+            RequestBody body = RequestBody.fromInputStream(inputStream, partSize);
             if (log.isDebugEnabled()) {
                 log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
             }
-            partETags.add(s3Client.uploadPart(request).getPartETag());
+            UploadPartResponse response = s3Client.uploadPart(request, body);
+            CompletedPart part = CompletedPart.builder()
+                    .partNumber(currentPartNumber)
+                    .eTag(response.eTag())
+                    .build();
+            partETags.add(part);
         }
 
         /**
@@ -244,7 +260,15 @@ public class S3OutputStream extends OutputStream {
                 log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
             }
             CompleteMultipartUploadRequest completeRequest =
-                    new CompleteMultipartUploadRequest(bucketName, key, uploadId, partETags);
+                    CompleteMultipartUploadRequest.builder()
+                            .bucket(bucketName)
+                            .key(key)
+                            .uploadId(uploadId)
+                            .multipartUpload(
+                                    CompletedMultipartUpload.builder()
+                                            .parts(partETags)
+                                            .build())
+                            .build();
             s3Client.completeMultipartUpload(completeRequest);
         }
 
@@ -253,7 +277,8 @@ public class S3OutputStream extends OutputStream {
                 log.warn("Aborting multi-part upload with id '{}'", uploadId);
             }
             try {
-                s3Client.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, key, uploadId));
+                s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder().bucket(bucketName).key(key).uploadId(uploadId)
+                        .build());
             } catch (Exception e) {
                 // ignoring failure on abort.
                 if (log.isWarnEnabled()) {

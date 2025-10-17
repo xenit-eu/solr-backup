@@ -71,7 +71,11 @@ public class S3BackupRepository implements BackupRepository {
       client.close();
     }
 
-    this.client = backupConfig.buildClient();
+      try {
+          this.client = backupConfig.buildClient();
+      } catch (URISyntaxException e) {
+          throw new RuntimeException(e);
+      }
   }
 
   @Override
