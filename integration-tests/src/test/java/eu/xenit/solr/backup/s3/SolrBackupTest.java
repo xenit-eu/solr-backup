@@ -152,6 +152,7 @@ class SolrBackupTest {
 
 
     void validateSnapshotCount(long count) {
+        System.out.printf("Validating snapshot count = %s.\n", count);
         await().atMost(180, TimeUnit.SECONDS)
                 /*
                  * SDK v2 Migration:
@@ -163,9 +164,6 @@ class SolrBackupTest {
                                 .build())
                         .contents()
                         .stream()
-                        .peek(s3Object -> System.out.println(
-                                "Found S3 object: key=" + s3Object.key() + ", size=" + s3Object.size()
-                        ))
                         .filter(s3Object -> s3Object.size() == 0
                                 && s3Object.key().contains("snapshot"))
                         .count() == count);

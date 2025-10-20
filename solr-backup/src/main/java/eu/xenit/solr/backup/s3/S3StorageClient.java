@@ -36,6 +36,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.CommonPrefix;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
@@ -193,6 +194,8 @@ class S3StorageClient {
             PutObjectRequest putRequest = PutObjectRequest.builder()
                     .bucket(bucketName)
                     .key(path)
+                    .contentType(S3_DIR_CONTENT_TYPE)
+                    .metadata(Collections.singletonMap("Content-Type", S3_DIR_CONTENT_TYPE))
                     .build();
             s3Client.putObject(putRequest, RequestBody.empty());
         } catch (SdkException ase) {
@@ -250,65 +253,51 @@ class S3StorageClient {
     String[] listDir(String path) throws S3Exception {
         path = sanitizedDirPath(path);
 
-        final String prefix; // final for use in lambda
-        if (!path.equals("/")) prefix = path;
-        else {
-            prefix = "";
-        }
-        /*
-         * SDK v2 Migration: Switched from the generic `ListObjectsRequest` to the recommended
-         * `ListObjectsV2Request` for better performance and features.
-         */
-        ListObjectsV2Request listRequest =
-                ListObjectsV2Request.builder()
-                        .bucket(bucketName)
-                        .prefix(prefix)
-                        .delimiter(S3_FILE_PATH_DELIMITER)
-                        .build();
+        String prefix = path.equals("/") ? "" : path;
+
+        // The request MUST include the delimiter.
+        ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .prefix(prefix)
+                .delimiter(S3_FILE_PATH_DELIMITER)
+                .build();
 
         List<String> entries = new ArrayList<>();
         try {
-            /*
-             * SDK v2 Migration: Replaced the manual `while(true)` loop and the non-existent
-             * `listNextBatchOfObjects` method with the SDK v2 paginator.
-             * The `listObjectsV2Paginator` automatically handles making subsequent requests
-             * to fetch all pages of results, simplifying the code significantly.
-             */
+            // The v2 paginator correctly handles multiple pages of results.
             s3Client.listObjectsV2Paginator(listRequest).forEach(page -> {
-                // Process the common prefixes (subdirectories).
-                List<String> commonPrefixes = page.commonPrefixes().stream()
-                        .map(cp -> cp.prefix())
+
+                // 1. Get the list of files (S3Object) at the current level.
+                List<String> files = page.contents().stream()
+                        .map(S3Object::key)
                         .collect(Collectors.toList());
 
-                /*
-                 * SDK v2 Migration: The object list in `ListObjectsV2Response` is accessed
-                 * via the `contents()` method, not `objectSummaries()`.
-                 */
-                List<String> files =
-                        page.contents().stream()
-                                .map(S3Object::key)
-                                .collect(Collectors.toList());
-                files.addAll(commonPrefixes);
-                List<String> processedFiles =
-                        files.stream()
-                                .filter(s -> s.startsWith(prefix))
-                                .map(s -> s.substring(prefix.length()))
-                                .filter(s -> !s.isEmpty())
-                                .filter(
-                                        s -> {
-                                            int slashIndex = s.indexOf(S3_FILE_PATH_DELIMITER);
-                                            return slashIndex == -1 || slashIndex == s.length() - 1;
-                                        })
-                                .map(
-                                        s -> {
-                                            if (s.endsWith(S3_FILE_PATH_DELIMITER)) {
-                                                return s.substring(0, s.length() - 1);
-                                            }
-                                            return s;
-                                        })
-                                .collect(Collectors.toList());
+                // 2. Get the list of directories (CommonPrefix) at the current level.
+                List<String> directories = page.commonPrefixes().stream()
+                        .map(CommonPrefix::prefix)
+                        .collect(Collectors.toList());
 
-                entries.addAll(processedFiles);
+                // 3. Combine them into a single list to be processed.
+                files.addAll(directories);
+
+                // This filtering is only needed for S3mock. Real S3 does not ignore the trailing '/' in the prefix
+                List<String> processedEntries = files.stream()
+                        .filter(s -> s.startsWith(prefix))
+                        .map(s -> s.substring(prefix.length()))
+                        .filter(s -> !s.isEmpty())
+                        .filter(s -> {
+                            int slashIndex = s.indexOf(S3_FILE_PATH_DELIMITER);
+                            return slashIndex == -1 || slashIndex == s.length() - 1;
+                        })
+                        .map(s -> {
+                            if (s.endsWith(S3_FILE_PATH_DELIMITER)) {
+                                return s.substring(0, s.length() - 1);
+                            }
+                            return s;
+                        })
+                        .collect(Collectors.toList());
+
+                entries.addAll(processedEntries);
             });
 
             return entries.toArray(new String[0]);
@@ -374,7 +363,7 @@ class S3StorageClient {
         String dirPath = sanitizedDirPath(path);
 
         try {
-            HeadObjectResponse dirResponse = getObjectMetadata(path);
+            HeadObjectResponse dirResponse = getObjectMetadata(dirPath);
             // SDK v2 Migration: Get the content type from the response object.
             String contentType = dirResponse.contentType();
             return !StringUtils.isEmpty(contentType) && contentType.equalsIgnoreCase(S3_DIR_CONTENT_TYPE);

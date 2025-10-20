@@ -277,7 +277,11 @@ public class S3OutputStream extends OutputStream {
                 log.warn("Aborting multi-part upload with id '{}'", uploadId);
             }
             try {
-                s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder().bucket(bucketName).key(key).uploadId(uploadId)
+                s3Client.abortMultipartUpload(AbortMultipartUploadRequest
+                        .builder()
+                        .bucket(bucketName)
+                        .key(key)
+                        .uploadId(uploadId)
                         .build());
             } catch (Exception e) {
                 // ignoring failure on abort.
