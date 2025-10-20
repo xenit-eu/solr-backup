@@ -66,15 +66,6 @@ public class S3BackupRepository implements BackupRepository {
     this.config = args;
     S3BackupRepositoryConfig backupConfig = new S3BackupRepositoryConfig(this.config);
 
-      log.warn("--- S3BackupRepository INITIALIZING WITH THE FOLLOWING CONFIG ---");
-      log.warn("Endpoint Override: {}", backupConfig.getEndpoint());
-      log.warn("Region: {}", backupConfig.getRegion());
-      log.warn("Bucket Name: {}", backupConfig.getBucketName());
-      log.warn("Force Path Style: {}", backupConfig.getPathStyleAccessEnabled());
-      log.warn("Access Key Set: {}", !StringUtils.isEmpty(backupConfig.getAccessKey()));
-      log.warn("----------------------------------------------------------------");
-
-
       // If a client was already created, close it to avoid any resource leak
     if (client != null) {
       client.close();
