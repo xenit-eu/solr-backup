@@ -147,12 +147,11 @@ class SolrBackupTest {
         callBackupEndpoint(2);
         validateSnapshotCount(2);
         callBackupEndpoint(3);
-        validateSnapshotCount(2); // ??????????????
+        validateSnapshotCount(2);
     }
 
 
     void validateSnapshotCount(long count) {
-        System.out.printf("Validating snapshot count = %s.\n", count);
         await().atMost(180, TimeUnit.SECONDS)
                 /*
                  * SDK v2 Migration:
