@@ -196,7 +196,6 @@ class SolrBackupTest {
                             .statusCode(200)
                             .extract()
                             .path("details.backup");
-                    if (backup != null) System.out.println("Found backup object: %s".formatted(backup));
                     System.out.println("elapsed = " + (System.currentTimeMillis() - startTime));
                     return backup != null;
                 });
