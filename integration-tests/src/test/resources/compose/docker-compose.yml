@@ -39,21 +39,13 @@ services:
       - JMX_ENABLED=true
       - JAVA_XMX=1024M
       - ALFRESCO_SECRET=mysolrsecret
-      - S3_CLIENT_ENDPOINT_OVERRIDE=http://localstack:4566
-      - S3_CLIENT_REGION=us-east-1
+      - S3_ENDPOINT=http://localstack:4566
+      - S3_REGION=us-east-1
       - S3_BUCKET_NAME=bucket
-      - S3_CLIENT_ACCESS_KEY=access_key
-      - S3_CLIENT_SECRET_KEY=secret_key
-      - S3_CLIENT_FORCE_PATH_STYLE=true
-      - >-
-        SOLR_OPTS=
-        -DS3_CLIENT_ENDPOINT_OVERRIDE=http://localstack:4566
-        -DS3_CLIENT_REGION=us-east-1
-        -DS3_BUCKET_NAME=bucket
-        -DS3_CLIENT_ACCESS_KEY=access_key
-        -DS3_CLIENT_SECRET_KEY=secret_key
-        -DS3_CLIENT_FORCE_PATH_STYLE=true
-        -DS3_CLIENT_CHECKSUM_VALIDATION_ENABLED=false
+      - S3_ACCESS_KEY=access_key
+      - S3_SECRET_KEY=secret_key
+      - S3_PATH_STYLE_ACCESS_ENABLED=true
+      - S3_CLIENT_CHECKSUM_VALIDATION_ENABLED=false
 
   localstack:
     container_name: localstack
