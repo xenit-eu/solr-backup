@@ -26,6 +26,7 @@ import java.net.URISyntaxException;
  * config can be overridden via environment variables (use uppercase, with '_' instead of '.'), see
  * {@link S3BackupRepositoryConfig#toEnvVar}.
  */
+@Getter
 public class S3BackupRepositoryConfig {
     public static final String S3_BUCKET_NAME = "s3.bucket.name";
     public static final String S3_REGION = "s3.region";
@@ -37,23 +38,22 @@ public class S3BackupRepositoryConfig {
     public static final String S3_PROXY_HOST = "s3.proxy.host";
     public static final String S3_PROXY_PORT = "s3.proxy.port";
 
-    @Getter
     private final String bucketName;
-    @Getter
+
     private final String region;
-    @Getter
+
     private final String accessKey;
-    @Getter
+
     private final String secretKey;
-    @Getter
+
     private final String proxyHost;
-    @Getter
+
     private final int proxyPort;
-    @Getter
+
     private final String endpoint;
-    @Getter
+
     private final Boolean pathStyleAccessEnabled;
-    @Getter
+
     private final Boolean checksumValidationEnabled;
 
 
