@@ -26,16 +26,17 @@ import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Implementation is adapted from
@@ -196,16 +197,6 @@ public class S3OutputStream extends OutputStream {
         }
     }
 
-    // TODO: upgrade from 1.x sdk
-    // Placeholder listener for now, just logs the event progress.
-    /*private static class ConnectProgressListener extends TransferListener {
-        public void progressChanged(ProgressEvent progressEvent) {
-            if (log.isDebugEnabled()) {
-                log.debug("Progress event {}", progressEvent);
-            }
-        }
-    }*/
-
     private class MultipartUpload {
         private final String uploadId;
         private final List<CompletedPart> partETags;
@@ -231,7 +222,14 @@ public class S3OutputStream extends OutputStream {
              * - The partSize is now a parameter of RequestBody.fromInputStream.
              * - Removed non-existent builder methods: `inputStream`, `partSize`, `lastPart`, `generalProgressListener`.
              * - Pass `contentLength` to request
+             * - Wrap the input stream into a progress listening input stream.
              */
+            Consumer<Long> progressListener = (bytesTransferred) -> {
+                log.debug("Progress: {} bytes", bytesTransferred);
+            };
+            InputStream trackedStream = new ProgressTrackingInputStream(inputStream, progressListener);
+            RequestBody body = RequestBody.fromInputStream(trackedStream, partSize);
+
             UploadPartRequest request =
                     UploadPartRequest.builder()
                             .bucket(bucketName)
@@ -240,7 +238,7 @@ public class S3OutputStream extends OutputStream {
                             .partNumber(currentPartNumber)
                             .contentLength((long) partSize)
                             .build();
-            RequestBody body = RequestBody.fromInputStream(inputStream, partSize);
+
             if (log.isDebugEnabled()) {
                 log.debug("Uploading part {} for id '{}'", currentPartNumber, uploadId);
             }
