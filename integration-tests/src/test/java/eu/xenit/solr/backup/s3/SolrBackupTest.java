@@ -206,7 +206,6 @@ class SolrBackupTest {
         ClientOverrideConfiguration clientConfig = ClientOverrideConfiguration.builder().build();
 
         S3Configuration configuration = S3Configuration.builder()
-                .checksumValidationEnabled(false)
                 .build();
 
         S3ClientBuilder clientBuilder = S3Client.builder()
