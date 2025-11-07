@@ -37,6 +37,7 @@ public class S3BackupRepositoryConfig {
     public static final String S3_CLIENT_CHECKSUM_VALIDATION_ENABLED = "s3.client.checksum.validation.enabled";
     public static final String S3_PROXY_HOST = "s3.proxy.host";
     public static final String S3_PROXY_PORT = "s3.proxy.port";
+    public static final String S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL = "s3.client.progressLogByteInterval";
 
     private final String bucketName;
 
@@ -56,6 +57,8 @@ public class S3BackupRepositoryConfig {
 
     private final Boolean checksumValidationEnabled;
 
+    private final Integer progressLogByteInterval;
+
 
     public S3BackupRepositoryConfig(NamedList<?> config) {
         region = getStringConfig(config, S3_REGION);
@@ -67,13 +70,14 @@ public class S3BackupRepositoryConfig {
         secretKey = getStringConfig(config, S3_SECRET_KEY);
         pathStyleAccessEnabled = getBooleanConfig(config, S3_PATH_STYLE_ACCESS_ENABLED);
         checksumValidationEnabled = getBooleanConfig(config, S3_CLIENT_CHECKSUM_VALIDATION_ENABLED);
+        progressLogByteInterval = getIntConfig(config, S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL);
     }
 
     /**
      * @return a {@link S3StorageClient} from the provided config.
      */
     public S3StorageClient buildClient() throws URISyntaxException {
-        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled, checksumValidationEnabled);
+        return new S3StorageClient(this);
     }
 
     private static String getStringConfig(NamedList<?> config, String property) {

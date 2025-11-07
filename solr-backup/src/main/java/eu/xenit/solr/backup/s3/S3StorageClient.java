@@ -93,36 +93,24 @@ class S3StorageClient {
     private static final Set<String> NOT_FOUND_CODES = Set.of("NoSuchKey", "404 Not Found");
 
     private final S3Client s3Client;
+    private final S3BackupRepositoryConfig configuration;
 
-    /**
-     * The S3 bucket where we read/write all data.
-     */
-    private final String bucketName;
-
-    S3StorageClient(
-            String bucketName, String region, String proxyHost, int proxyPort, String endpoint, String accessKey, String secretKey, Boolean pathStyleAccessEnabled, Boolean checksumValidationEnabled) throws URISyntaxException {
-        this(createInternalClient(region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled, checksumValidationEnabled), bucketName);
+    S3StorageClient(S3BackupRepositoryConfig config) throws URISyntaxException {
+        this(createInternalClient(config), config);
     }
 
     @VisibleForTesting
-    S3StorageClient(S3Client s3Client, String bucketName) {
+    S3StorageClient(S3Client s3Client, S3BackupRepositoryConfig configuration) {
         this.s3Client = s3Client;
-        this.bucketName = bucketName;
+        this.configuration = configuration;
     }
 
-    private static S3Client createInternalClient(
-            String region,
-            String proxyHost,
-            int proxyPort,
-            String endpoint,
-            String accessKey,
-            String secretKey, Boolean pathStyleAccessEnabled,
-            Boolean checksumValidationEnabled) throws URISyntaxException {
+    private static S3Client createInternalClient(S3BackupRepositoryConfig config) throws URISyntaxException {
 
         S3ClientBuilder clientBuilder = S3Client.builder();
 
         S3Configuration configuration = S3Configuration.builder()
-                .checksumValidationEnabled(checksumValidationEnabled)
+                .checksumValidationEnabled(config.getChecksumValidationEnabled())
                 .build();
         clientBuilder.serviceConfiguration(configuration);
 
@@ -131,9 +119,9 @@ class S3StorageClient {
          * not on a general client configuration object.
          */
         ApacheHttpClient.Builder httpClientBuilder = ApacheHttpClient.builder();
-        if (!StringUtils.isEmpty(proxyHost)) {
+        if (!StringUtils.isEmpty(config.getProxyHost())) {
             ProxyConfiguration.Builder proxyConfigBuilder = ProxyConfiguration.builder()
-                    .endpoint(URI.create(proxyHost + ":" + proxyPort));
+                    .endpoint(URI.create(config.getProxyHost() + ":" + config.getProxyPort()));
             httpClientBuilder.proxyConfiguration(proxyConfigBuilder.build());
         }
         clientBuilder.httpClientBuilder(httpClientBuilder);
@@ -145,9 +133,9 @@ class S3StorageClient {
          */
         clientBuilder.overrideConfiguration(ClientOverrideConfiguration.builder().build());
 
-        if (!(StringUtils.isEmpty(accessKey) || StringUtils.isEmpty(secretKey))) {
+        if (!(StringUtils.isEmpty(config.getAccessKey()) || StringUtils.isEmpty(config.getSecretKey()))) {
             clientBuilder.credentialsProvider(
-                    StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
+                    StaticCredentialsProvider.create(AwsBasicCredentials.create(config.getAccessKey(), config.getSecretKey())));
         } else {
             log.info("No accessKey or secretKey configured, using default credentials provider chain");
         }
@@ -156,17 +144,17 @@ class S3StorageClient {
          * SDK v2 Migration: `setEndpointConfiguration` from v1 is replaced by
          * `endpointOverride`. The region must still be set separately.
          */
-        if (!StringUtils.isEmpty(endpoint)) {
-            clientBuilder.endpointOverride(new URI(endpoint));
+        if (!StringUtils.isEmpty(config.getEndpoint())) {
+            clientBuilder.endpointOverride(new URI(config.getEndpoint()));
         }
-        clientBuilder.region(Region.of(region));
+        clientBuilder.region(Region.of(config.getRegion()));
 
         /*
          * SDK v2 Migration: The method `withPathStyleAccessEnabled(boolean)` from v1 is
          * replaced by `forcePathStyle(boolean)` in v2.
          */
-        if (pathStyleAccessEnabled != null) {
-            clientBuilder.forcePathStyle(pathStyleAccessEnabled);
+        if (config.getPathStyleAccessEnabled() != null) {
+            clientBuilder.forcePathStyle(config.getPathStyleAccessEnabled());
         }
 
         return clientBuilder.build();
@@ -192,7 +180,7 @@ class S3StorageClient {
              * In v2, request parameters like bucket and key are set using builder methods.
              */
             PutObjectRequest putRequest = PutObjectRequest.builder()
-                    .bucket(bucketName)
+                    .bucket(this.configuration.getBucketName())
                     .key(path)
                     .contentType(S3_DIR_CONTENT_TYPE)
                     .metadata(Collections.singletonMap("Content-Type", S3_DIR_CONTENT_TYPE))
@@ -257,7 +245,7 @@ class S3StorageClient {
 
         // The request MUST include the delimiter.
         ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
-                .bucket(bucketName)
+                .bucket(this.configuration.getBucketName())
                 .prefix(prefix)
                 .delimiter(S3_FILE_PATH_DELIMITER)
                 .build();
@@ -312,7 +300,7 @@ class S3StorageClient {
          * This is the standard v2 way to retrieve object metadata without fetching the object's content.
          */
         HeadObjectRequest request = HeadObjectRequest.builder()
-                .bucket(bucketName)
+                .bucket(this.configuration.getBucketName())
                 .key(path)
                 .build();
         return s3Client.headObject(request);
@@ -418,7 +406,10 @@ class S3StorageClient {
         path = sanitizedFilePath(path);
 
         try {
-            ResponseInputStream<GetObjectResponse> requestedObject = s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(path)
+            ResponseInputStream<GetObjectResponse> requestedObject = s3Client
+                    .getObject(GetObjectRequest.builder()
+                            .bucket(this.configuration.getBucketName())
+                            .key(path)
                     .build());
             // This InputStream instance needs to be closed by the caller
             return requestedObject;
@@ -441,7 +432,7 @@ class S3StorageClient {
         }
 
         try {
-            return new S3OutputStream(s3Client, path, bucketName);
+            return new S3OutputStream(s3Client, path, this.configuration);
         } catch (SdkException ase) {
             throw handleAmazonException(ase);
         }
@@ -519,7 +510,10 @@ class S3StorageClient {
         if (deleteIndividually) {
             for (ObjectIdentifier k : keysToDelete) {
                 try {
-                    s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(k.key())
+                    s3Client.deleteObject(DeleteObjectRequest
+                            .builder()
+                            .bucket(this.configuration.getBucketName())
+                            .key(k.key())
                             .build());
                     deletedPaths.add(k.key());
                 } catch (SdkException e) {
@@ -541,7 +535,7 @@ class S3StorageClient {
                 .build();
 
         return DeleteObjectsRequest.builder()
-                .bucket(bucketName)
+                .bucket(this.configuration.getBucketName())
                 .delete(deleteAction)
                 .build();
     }
@@ -554,7 +548,7 @@ class S3StorageClient {
          * `ListObjectsV2Request`.
          */
         ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
-                .bucket(bucketName)
+                .bucket(this.configuration.getBucketName())
                 .prefix(prefix)
                 .build();
 
