@@ -221,14 +221,13 @@ public class S3OutputStream extends OutputStream {
              * - Wrap the input stream into a progress listening input stream.
              */
             Consumer<Long> progressListener = new Consumer<>() {
-                private Long bytesSinceLastCheckpoint = 0L;
+                private Long lastCheckpointBytes = 0L;
 
-                public void accept(Long bytesTransferred) {
-                    // Only log every interval of bytes, instead of each event
-                    bytesSinceLastCheckpoint += bytesTransferred;
-                    if (bytesSinceLastCheckpoint > configuration.getProgressLogByteInterval()) {
-                        log.debug("Progress: {} bytes", bytesTransferred);
-                        bytesSinceLastCheckpoint = 0L;
+                @Override
+                public void accept(Long totalBytesTransferred) {
+                    if (totalBytesTransferred - lastCheckpointBytes >= configuration.getProgressLogByteInterval()) {
+                        log.debug("Progress: {} bytes", totalBytesTransferred);
+                        lastCheckpointBytes = totalBytesTransferred;
                     }
                 }
             };

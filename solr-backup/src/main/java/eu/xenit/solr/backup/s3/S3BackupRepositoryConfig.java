@@ -53,11 +53,11 @@ public class S3BackupRepositoryConfig {
 
     private final String endpoint;
 
-    private final Boolean pathStyleAccessEnabled;
+    private final boolean pathStyleAccessEnabled;
 
-    private final Boolean checksumValidationEnabled;
+    private final boolean checksumValidationEnabled;
 
-    private final Integer progressLogByteInterval;
+    private final int progressLogByteInterval;
 
 
     public S3BackupRepositoryConfig(NamedList<?> config) {
