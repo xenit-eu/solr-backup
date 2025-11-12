@@ -110,7 +110,7 @@ class S3StorageClient {
         S3ClientBuilder clientBuilder = S3Client.builder();
 
         S3Configuration configuration = S3Configuration.builder()
-                .checksumValidationEnabled(config.getChecksumValidationEnabled())
+                .checksumValidationEnabled(config.isChecksumValidationEnabled())
                 .build();
         clientBuilder.serviceConfiguration(configuration);
 
@@ -153,9 +153,7 @@ class S3StorageClient {
          * SDK v2 Migration: The method `withPathStyleAccessEnabled(boolean)` from v1 is
          * replaced by `forcePathStyle(boolean)` in v2.
          */
-        if (config.getPathStyleAccessEnabled() != null) {
-            clientBuilder.forcePathStyle(config.getPathStyleAccessEnabled());
-        }
+        clientBuilder.forcePathStyle(config.isPathStyleAccessEnabled());
 
         return clientBuilder.build();
     }
