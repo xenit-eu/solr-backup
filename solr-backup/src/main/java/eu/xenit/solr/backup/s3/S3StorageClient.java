@@ -114,10 +114,6 @@ class S3StorageClient {
                 .build();
         clientBuilder.serviceConfiguration(configuration);
 
-        /*
-         * SDK v2 Migration: Proxy settings are now configured on the HTTP client,
-         * not on a general client configuration object.
-         */
         ApacheHttpClient.Builder httpClientBuilder = ApacheHttpClient.builder();
         if (!StringUtils.isEmpty(config.getProxyHost())) {
             ProxyConfiguration.Builder proxyConfigBuilder = ProxyConfiguration.builder()
@@ -126,11 +122,6 @@ class S3StorageClient {
         }
         clientBuilder.httpClientBuilder(httpClientBuilder);
 
-        /*
-         * SDK v2 Migration: ClientOverrideConfiguration is still used for high-level
-         * configuration, but protocol and proxy settings have been moved.
-         * The protocol is now inferred from the endpoint URI (defaulting to HTTPS).
-         */
         clientBuilder.overrideConfiguration(ClientOverrideConfiguration.builder().build());
 
         if (!(StringUtils.isEmpty(config.getAccessKey()) || StringUtils.isEmpty(config.getSecretKey()))) {
@@ -140,19 +131,11 @@ class S3StorageClient {
             log.info("No accessKey or secretKey configured, using default credentials provider chain");
         }
 
-        /*
-         * SDK v2 Migration: `setEndpointConfiguration` from v1 is replaced by
-         * `endpointOverride`. The region must still be set separately.
-         */
         if (!StringUtils.isEmpty(config.getEndpoint())) {
             clientBuilder.endpointOverride(new URI(config.getEndpoint()));
         }
         clientBuilder.region(Region.of(config.getRegion()));
 
-        /*
-         * SDK v2 Migration: The method `withPathStyleAccessEnabled(boolean)` from v1 is
-         * replaced by `forcePathStyle(boolean)` in v2.
-         */
         clientBuilder.forcePathStyle(config.isPathStyleAccessEnabled());
 
         return clientBuilder.build();
@@ -171,12 +154,6 @@ class S3StorageClient {
         }
 
         try {
-            /*
-             * SDK v2 Migration:
-             * - Removed the v1-style use of an empty InputStream and an ObjectMetadata object.
-             * - Replaced the v1 constructor `new PutObjectRequest(...)` with the v2 builder pattern.
-             * In v2, request parameters like bucket and key are set using builder methods.
-             */
             PutObjectRequest putRequest = PutObjectRequest.builder()
                     .bucket(this.configuration.getBucketName())
                     .key(path)
@@ -250,7 +227,6 @@ class S3StorageClient {
 
         List<String> entries = new ArrayList<>();
         try {
-            // The v2 paginator correctly handles multiple pages of results.
             s3Client.listObjectsV2Paginator(listRequest).forEach(page -> {
 
                 // 1. Get the list of files (S3Object) at the current level.
@@ -293,10 +269,6 @@ class S3StorageClient {
     }
 
     HeadObjectResponse getObjectMetadata(String path) throws SdkException {
-        /*
-         * SDK v2 Migration: Replaced the v1 `getObjectMetadata` method with a `headObject` call.
-         * This is the standard v2 way to retrieve object metadata without fetching the object's content.
-         */
         HeadObjectRequest request = HeadObjectRequest.builder()
                 .bucket(this.configuration.getBucketName())
                 .key(path)
@@ -322,12 +294,6 @@ class S3StorageClient {
         }
 
         try {
-            /*
-             * SDK v2 Migration: Replaced the v1 `doesObjectExist` convenience method.
-             * The standard v2 pattern is to make a lightweight `headObject` request.
-             * If the request succeeds, the object exists. If it throws a `NoSuchKeyException`,
-             * the object does not exist.
-             */
             getObjectMetadata(path);
             return true;
         } catch (NoSuchKeyException e) {
@@ -350,13 +316,10 @@ class S3StorageClient {
 
         try {
             HeadObjectResponse dirResponse = getObjectMetadata(dirPath);
-            // SDK v2 Migration: Get the content type from the response object.
             String contentType = dirResponse.contentType();
             return !StringUtils.isEmpty(contentType) && contentType.equalsIgnoreCase(S3_DIR_CONTENT_TYPE);
 
         } catch (NoSuchKeyException e) {
-            // SDK v2 Migration: Catch the specific `NoSuchKeyException` instead of the broad `AmazonClientException`.
-            // This indicates the directory marker object (e.g., "path/") was not found. Now, try the file path as a fallback.
             String filePath = sanitizedFilePath(path);
             try {
                 HeadObjectResponse fileResponse = getObjectMetadata(filePath);
@@ -368,7 +331,6 @@ class S3StorageClient {
                 return false;
             }
         } catch (SdkException ase) {
-            // SDK v2 Migration: Catch the base `SdkException` for all other client or service errors.
             throw handleAmazonException(ase);
         }
     }
@@ -468,10 +430,6 @@ class S3StorageClient {
      */
     @VisibleForTesting
     Collection<String> deleteObjects(Collection<String> entries, int batchSize) throws S3Exception {
-        /*
-         * SDK v2 Migration: Replaced the v1 `KeyVersion` class with the v2 `ObjectIdentifier`.
-         * `ObjectIdentifier` is the standard way to specify a key for batch operations.
-         */
         List<ObjectIdentifier> keysToDelete = entries.stream()
                 .map(key -> ObjectIdentifier.builder().key(key).build())
                 .collect(Collectors.toList());
@@ -487,10 +445,6 @@ class S3StorageClient {
             try {
                 DeleteObjectsResponse result = s3Client.deleteObjects(request);
 
-                /*
-                 * SDK v2 Migration: The response object's method to get deleted items is `deleted()`,
-                 * not `deletedObjects()`. The items in the list are of type `DeletedObject`.
-                 */
                 result.deleted().stream()
                         .map(DeletedObject::key)
                         .forEach(deletedPaths::add);
@@ -524,10 +478,6 @@ class S3StorageClient {
     }
 
     private DeleteObjectsRequest createBatchDeleteRequest(List<ObjectIdentifier> keysToDelete) {
-        /*
-         * SDK v2 Migration: The request requires a `Delete` object that wraps the list
-         * of `ObjectIdentifier`s, instead of passing the list directly to the request builder.
-         */
         Delete deleteAction = Delete.builder()
                 .objects(keysToDelete)
                 .build();
@@ -541,10 +491,6 @@ class S3StorageClient {
     private List<String> listAll(String path) throws S3Exception {
         String prefix = sanitizedDirPath(path);
 
-        /*
-         * SDK v2 Migration: Switched from the generic `ListObjectsRequest` to the recommended
-         * `ListObjectsV2Request`.
-         */
         ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
                 .bucket(this.configuration.getBucketName())
                 .prefix(prefix)
@@ -552,20 +498,9 @@ class S3StorageClient {
 
         List<String> entries = new ArrayList<>();
         try {
-                /*
-                 * SDK v2 Migration: Replaced the manual `while` loop and the non-existent
-                 * `listNextBatchOfObjects` method with the idiomatic v2 paginator.
-                 * The `listObjectsV2Paginator` automatically handles the logic of fetching
-                 * subsequent pages of results until all objects are listed.
-                 */
                 s3Client.listObjectsV2Paginator(listRequest).forEach(page -> {
-                    /*
-                     * SDK v2 Migration: The object list in the response is accessed via
-                     * the `contents()` method, which replaces the v1 `objectSummaries()`.
-                     */
                     List<String> files = page.contents().stream()
                             .map(S3Object::key)
-                            // This application-specific filtering logic is preserved.
                             .filter(s -> s.startsWith(prefix))
                             .collect(Collectors.toList());
 
@@ -620,10 +555,6 @@ class S3StorageClient {
         return sanitizedPath;
     }
 
-    /**
-     * Ensures file path adheres to some rules: -Overall Path rules from `sanitizedPath` -Throw an
-     * error if it ends with a trailing slash
-     */
     String sanitizedFilePath(String path) throws S3Exception {
         // Trim space from start and end
         String sanitizedPath = sanitizedPath(path);
@@ -640,10 +571,7 @@ class S3StorageClient {
         return sanitizedPath;
     }
 
-    /**
-     * Ensures directory path adheres to some rules: -Overall Path rules from `sanitizedPath` -Add a
-     * trailing slash if one does not exist
-     */
+
     String sanitizedDirPath(String path) throws S3Exception {
         // Trim space from start and end
         String sanitizedPath = sanitizedPath(path);
@@ -670,13 +598,6 @@ class S3StorageClient {
         if (ace instanceof AwsServiceException) {
             AwsServiceException ase = (AwsServiceException) ace;
 
-            /*
-             * SDK v2 Migration:
-             * - Replaced `ase.awsErrorDetails().sdkHttpResponse().statusCode()` with the simpler `ase.statusCode()`.
-             * - The `getErrorType()` method from v1 (which returned an enum like Client/Service) does not exist in v2.
-             * The fact that we are in this block means it's a service-side error, so we can hardcode "Service"
-             * to maintain the log's structure.
-             */
             String errMessage =
                     String.format(
                             Locale.ROOT,

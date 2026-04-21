@@ -153,12 +153,6 @@ class SolrBackupTest {
 
     void validateSnapshotCount(long count) {
         await().atMost(180, TimeUnit.SECONDS)
-                /*
-                 * SDK v2 Migration:
-                 * - Switched to `ListObjectsV2Request` for the S3 call.
-                 * - The response object's method to get the list of objects is now `contents()`, not `objectSummaries()`.
-                 * - The object class is `S3Object`, which has the same `size()` and `key()` methods.
-                 */
                 .until(() -> s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BUCKET)
                                 .build())
                         .contents()
@@ -202,7 +196,6 @@ class SolrBackupTest {
 
     private S3Client createInternalClient(
             String region, String endpoint, String accessKey, String secretKey) throws URISyntaxException {
-        // SDK v2 Migration: Removed explicit protocol setting, as it's inferred from the endpoint URI.
         ClientOverrideConfiguration clientConfig = ClientOverrideConfiguration.builder().build();
 
         S3Configuration configuration = S3Configuration.builder()
@@ -213,16 +206,9 @@ class SolrBackupTest {
                 .serviceConfiguration(configuration);
         clientBuilder.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
 
-        /*
-         * SDK v2 Migration:
-         * - Replaced the v1 `setEndpointConfiguration` with `endpointOverride` and `region`.
-         * - `endpointOverride` takes a URI object.
-         * - `region` must be set separately.
-         */
         clientBuilder.endpointOverride(new URI(endpoint));
         clientBuilder.region(Region.of(region));
 
-        // SDK v2 Migration: Replaced `pathStyleAccessEnabled(true)` with `forcePathStyle(true)`.
         clientBuilder.forcePathStyle(true);
         return clientBuilder.build();
     }

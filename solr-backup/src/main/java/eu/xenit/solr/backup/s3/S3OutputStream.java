@@ -212,14 +212,6 @@ public class S3OutputStream extends OutputStream {
         void uploadPart(ByteArrayInputStream inputStream, int partSize) {
             int currentPartNumber = partETags.size() + 1;
 
-            /*
-             * SDK v2 Migration:
-             * - Use RequestBody.fromInputStream to stream data.
-             * - The partSize is now a parameter of RequestBody.fromInputStream.
-             * - Removed non-existent builder methods: `inputStream`, `partSize`, `lastPart`, `generalProgressListener`.
-             * - Pass `contentLength` to request
-             * - Wrap the input stream into a progress listening input stream.
-             */
             Consumer<Long> progressListener = new Consumer<>() {
                 private Long lastCheckpointBytes = 0L;
 
