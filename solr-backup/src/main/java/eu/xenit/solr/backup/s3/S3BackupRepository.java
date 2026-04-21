@@ -66,12 +66,16 @@ public class S3BackupRepository implements BackupRepository {
     this.config = args;
     S3BackupRepositoryConfig backupConfig = new S3BackupRepositoryConfig(this.config);
 
-    // If a client was already created, close it to avoid any resource leak
+      // If a client was already created, close it to avoid any resource leak
     if (client != null) {
       client.close();
     }
 
-    this.client = backupConfig.buildClient();
+      try {
+          this.client = backupConfig.buildClient();
+      } catch (URISyntaxException e) {
+          throw new RuntimeException(e);
+      }
   }
 
   @Override

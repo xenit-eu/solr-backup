@@ -16,31 +16,48 @@
  */
 package eu.xenit.solr.backup.s3;
 
+import lombok.Getter;
 import org.apache.solr.common.util.NamedList;
+
+import java.net.URISyntaxException;
 
 /**
  * Class representing the {@code backup} S3 config bundle specified in solr.xml. All user-provided
  * config can be overridden via environment variables (use uppercase, with '_' instead of '.'), see
  * {@link S3BackupRepositoryConfig#toEnvVar}.
  */
+@Getter
 public class S3BackupRepositoryConfig {
     public static final String S3_BUCKET_NAME = "s3.bucket.name";
     public static final String S3_REGION = "s3.region";
     public static final String S3_ACCESS_KEY = "s3.access.key";
     public static final String S3_SECRET_KEY = "s3.secret.key";
     public static final String S3_ENDPOINT = "s3.endpoint";
+    public static final String S3_PATH_STYLE_ACCESS_ENABLED = "s3.path.style.access.enabled";
+    public static final String S3_CLIENT_CHECKSUM_VALIDATION_ENABLED = "s3.client.checksum.validation.enabled";
     public static final String S3_PROXY_HOST = "s3.proxy.host";
     public static final String S3_PROXY_PORT = "s3.proxy.port";
-    public static final String S3_PATH_STYLE_ACCESS_ENABLED = "s3.path.style.access.enabled";
+    public static final String S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL = "s3.client.progressLogByteInterval";
 
     private final String bucketName;
+
     private final String region;
+
     private final String accessKey;
+
     private final String secretKey;
+
     private final String proxyHost;
+
     private final int proxyPort;
+
     private final String endpoint;
-    private final Boolean pathStyleAccessEnabled;
+
+    private final boolean pathStyleAccessEnabled;
+
+    private final boolean checksumValidationEnabled;
+
+    private final int progressLogByteInterval;
 
 
     public S3BackupRepositoryConfig(NamedList<?> config) {
@@ -52,13 +69,15 @@ public class S3BackupRepositoryConfig {
         accessKey = getStringConfig(config, S3_ACCESS_KEY);
         secretKey = getStringConfig(config, S3_SECRET_KEY);
         pathStyleAccessEnabled = getBooleanConfig(config, S3_PATH_STYLE_ACCESS_ENABLED);
+        checksumValidationEnabled = getBooleanConfig(config, S3_CLIENT_CHECKSUM_VALIDATION_ENABLED);
+        progressLogByteInterval = getIntConfig(config, S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL);
     }
 
     /**
      * @return a {@link S3StorageClient} from the provided config.
      */
-    public S3StorageClient buildClient() {
-        return new S3StorageClient(bucketName, region, proxyHost, proxyPort, endpoint, accessKey, secretKey, pathStyleAccessEnabled);
+    public S3StorageClient buildClient() throws URISyntaxException {
+        return new S3StorageClient(this);
     }
 
     private static String getStringConfig(NamedList<?> config, String property) {

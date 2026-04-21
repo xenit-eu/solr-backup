@@ -1,13 +1,5 @@
 package eu.xenit.solr.backup.s3;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.Protocol;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectListing;
 import groovy.util.logging.Slf4j;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -20,7 +12,20 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
@@ -37,11 +42,11 @@ class SolrBackupTest {
     static RequestSpecification specBackupDetails;
     static RequestSpecification specRestore;
     static RequestSpecification specRestoreStatus;
-    static AmazonS3 s3Client;
+    static S3Client s3Client;
     static final String BUCKET = "bucket";
 
     @BeforeEach
-    public void setup() {
+    public void setup() throws URISyntaxException {
         String basePathSolr = "solr/alfresco";
         String basePathSolrBackup = "solr/alfresco/replication";
         String solrHost = System.getProperty("solr.host", "localhost");
@@ -148,14 +153,16 @@ class SolrBackupTest {
 
     void validateSnapshotCount(long count) {
         await().atMost(180, TimeUnit.SECONDS)
-                .until(() -> s3Client.listObjects(BUCKET)
-                        .getObjectSummaries()
+                .until(() -> s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BUCKET)
+                                .build())
+                        .contents()
                         .stream()
-                        .filter(s3ObjectSummary -> s3ObjectSummary.getSize() == 0
-                                && s3ObjectSummary.getKey().contains("snapshot"))
+                        .filter(s3Object -> s3Object.size() == 0
+                                && s3Object.key().contains("snapshot"))
                         .count() == count);
 
     }
+
     private void callBackupEndpoint() {
         callBackupEndpoint(0);
     }
@@ -187,13 +194,22 @@ class SolrBackupTest {
                 });
     }
 
-    private AmazonS3 createInternalClient(
-            String region, String endpoint, String accessKey, String secretKey) {
-        ClientConfiguration clientConfig = new ClientConfiguration().withProtocol(Protocol.HTTPS);
-        AmazonS3ClientBuilder clientBuilder = AmazonS3ClientBuilder.standard().withClientConfiguration(clientConfig);
-        clientBuilder.withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(accessKey, secretKey)));
-        clientBuilder.setEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endpoint, region));
-        clientBuilder.withPathStyleAccessEnabled(true);
+    private S3Client createInternalClient(
+            String region, String endpoint, String accessKey, String secretKey) throws URISyntaxException {
+        ClientOverrideConfiguration clientConfig = ClientOverrideConfiguration.builder().build();
+
+        S3Configuration configuration = S3Configuration.builder()
+                .build();
+
+        S3ClientBuilder clientBuilder = S3Client.builder()
+                .httpClientBuilder(ApacheHttpClient.builder()).overrideConfiguration(clientConfig)
+                .serviceConfiguration(configuration);
+        clientBuilder.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
+
+        clientBuilder.endpointOverride(new URI(endpoint));
+        clientBuilder.region(Region.of(region));
+
+        clientBuilder.forcePathStyle(true);
         return clientBuilder.build();
     }
 

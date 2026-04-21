@@ -20,11 +20,17 @@ dependencies {
     }
     compileOnly "org.alfresco:alfresco-search:${assVersion}"
 
-    implementation platform("com.amazonaws:aws-java-sdk-bom:${amazonVersion}")
+    implementation platform("software.amazon.awssdk:bom:${amazonVersion}")
 
-    implementation('com.amazonaws:aws-java-sdk-core')
-    implementation('com.amazonaws:aws-java-sdk-s3')
-    implementation("com.amazonaws:aws-java-sdk-sts")
+    implementation('ch.qos.logback:logback-classic:1.4.14')
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+
+    implementation('software.amazon.awssdk:aws-core')
+    implementation('software.amazon.awssdk:s3')
+    implementation("software.amazon.awssdk:sts")
+    implementation "software.amazon.awssdk:apache-client:${amazonVersion}"
+    implementation "software.amazon.awssdk:netty-nio-client:${amazonVersion}"
     testImplementation("org.apache.solr:solr-core:${solrVersion}") {
         exclude group: 'org.restlet.jee' // Only available in JCenter, not essential in this project.
     }

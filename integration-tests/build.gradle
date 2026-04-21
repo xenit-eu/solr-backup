@@ -28,11 +28,15 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-params:${junitJupiterVersion}"
     testImplementation "org.awaitility:awaitility:${awaitablityVersion}"
 
-    testImplementation platform("com.amazonaws:aws-java-sdk-bom:${amazonVersion}")
+    testImplementation platform("software.amazon.awssdk:bom:${amazonVersion}")
 
-    testImplementation('com.amazonaws:aws-java-sdk-core')
-    testImplementation('com.amazonaws:aws-java-sdk-s3')
-    testImplementation("com.amazonaws:aws-java-sdk-sts")
+    testImplementation('software.amazon.awssdk:aws-core')
+    testImplementation('software.amazon.awssdk:s3')
+    testImplementation("software.amazon.awssdk:sts")
+
+    testImplementation "software.amazon.awssdk:apache-client:${amazonVersion}"
+
+    testImplementation "software.amazon.awssdk:netty-nio-client:${amazonVersion}"
 
     testRuntimeOnly "org.glassfish.jaxb:jaxb-runtime:${jaxBVersion}"
 }
