@@ -14,24 +14,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
-import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static io.restassured.RestAssured.given;
 import static java.lang.Thread.sleep;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Slf4j
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -150,6 +158,157 @@ class SolrBackupTest {
         validateSnapshotCount(2);
     }
 
+
+    /**
+     * Requires S3_INCREMENTAL_ENABLED=true on the solr container (see docker-compose.yml).
+     * <p>
+     * Takes a backup, deletes a document and takes a second backup, so that only some of the index files changed.
+     * Then checks that the unchanged files of the second snapshot were copied server-side from the first one and
+     * that only the changed files were uploaded, and that restoring the second snapshot gives back its index.
+     * <p>
+     * Copied files are recognised by their ETag: S3OutputStream uploads files as multipart uploads, which have an
+     * ETag ending in "-<number of parts>", while an object created by a copy has a plain MD5 ETag.
+     * <p>
+     * This distinction relies on LocalStack's behaviour, which was checked manually for the LocalStack version used
+     * here (2.3.2) and for 4.8.0. It has not been verified against AWS S3 or the configuration of the target AWS
+     * deployment (for example SSE-KMS, where the ETag of an object is not an MD5 digest). Check that before relying
+     * on this ETag check, or on the copy itself, outside of LocalStack.
+     */
+    @Test
+    @Order(3)
+    void testIncrementalBackupReusesUnchangedFilesAndRestores() throws InterruptedException {
+        backupAndWaitForNewSnapshot();
+        long totalDocs = numberOfDocuments();
+        List<String> ids = documentIds(2);
+        assertTrue(totalDocs > 2, "Expected the index to contain documents, but found " + totalDocs);
+
+        deleteDocumentAndCommit(ids.get(0));
+        assertEquals(totalDocs - 1, numberOfDocuments());
+        String secondSnapshot = backupAndWaitForNewSnapshot();
+
+        Map<String, Map<String, S3Object>> snapshots = snapshotFiles();
+        String[] names = snapshots.keySet().toArray(new String[0]);
+        assertEquals(secondSnapshot, names[names.length - 1]);
+        Map<String, S3Object> first = snapshots.get(names[names.length - 2]);
+        Map<String, S3Object> second = snapshots.get(secondSnapshot);
+
+        int copied = 0;
+        int uploaded = 0;
+        for (Map.Entry<String, S3Object> file : second.entrySet()) {
+            S3Object previous = first.get(file.getKey());
+            boolean unchanged = previous != null && previous.size().equals(file.getValue().size());
+            boolean multipartUpload = file.getValue().eTag().contains("-");
+            if (unchanged) {
+                assertFalse(multipartUpload, file.getKey() + " is unchanged and should have been copied, not uploaded");
+                assertArrayEquals(content(previous), content(file.getValue()), file.getKey() + " differs from the copied file");
+                copied++;
+            } else {
+                assertTrue(multipartUpload, file.getKey() + " has changed and should have been uploaded, not copied");
+                uploaded++;
+            }
+        }
+        System.out.println("Second snapshot " + secondSnapshot + ": " + copied + " files copied, " + uploaded + " uploaded");
+        assertTrue(copied > 0, "No files were copied from the previous snapshot");
+        assertTrue(uploaded > 0, "No files were uploaded, so the deletion did not change the index files");
+
+        // Change the index again, so that restoring the second snapshot visibly goes back to its state
+        deleteDocumentAndCommit(ids.get(1));
+        assertEquals(totalDocs - 2, numberOfDocuments());
+
+        given().spec(specRestore).when().get().then().statusCode(200);
+        await().atMost(180, TimeUnit.SECONDS)
+                .pollInterval(1, TimeUnit.SECONDS)
+                .until(() -> {
+                    Map<String, Object> restore = given().spec(specRestoreStatus).when().get().then()
+                            .statusCode(200).extract().path("restorestatus");
+                    return secondSnapshot.equals(restore.get("snapshotName")) && "success".equals(restore.get("status"));
+                });
+        await().atMost(60, TimeUnit.SECONDS)
+                .pollInterval(1, TimeUnit.SECONDS)
+                .until(() -> numberOfDocuments() == totalDocs - 1);
+    }
+
+    /**
+     * Triggers a backup and waits until it completed, returning the name of the snapshot it created.
+     */
+    private String backupAndWaitForNewSnapshot() throws InterruptedException {
+        String latestBefore = latestSnapshot();
+        String completedBefore = backupCompletedAt();
+        sleep(2000); // The completion time has a resolution of a second
+        assertEquals("OK", given().spec(specBackup).when().get().then().statusCode(200).extract().path("status"));
+        await().atMost(180, TimeUnit.SECONDS)
+                .pollInterval(1, TimeUnit.SECONDS)
+                .until(() -> {
+                    String completed = backupCompletedAt();
+                    return completed != null && !completed.equals(completedBefore)
+                            && !String.valueOf(latestSnapshot()).equals(String.valueOf(latestBefore));
+                });
+        return latestSnapshot();
+    }
+
+    private String backupCompletedAt() {
+        // The backup details are a plain NamedList, which Solr renders as a flat array unless json.nl=map is given
+        Map<String, Object> backup = given().spec(specBackupDetails).param("json.nl", "map").when().get().then()
+                .statusCode(200).extract().path("details.backup");
+        if (backup == null) {
+            return null;
+        }
+        assertFalse(backup.containsKey("snapShootException"), "Backup failed: " + backup.get("snapShootException"));
+        return (String) backup.get("snapshotCompletedAt");
+    }
+
+    private String latestSnapshot() {
+        TreeMap<String, Map<String, S3Object>> snapshots = snapshotFiles();
+        return snapshots.isEmpty() ? null : snapshots.lastKey();
+    }
+
+    /**
+     * The files in each snapshot directory of the bucket, by snapshot name and file name, oldest snapshot first.
+     */
+    private TreeMap<String, Map<String, S3Object>> snapshotFiles() {
+        Pattern snapshotFile = Pattern.compile("(snapshot\\.\\d{17})/([^/]+)$");
+        TreeMap<String, Map<String, S3Object>> snapshots = new TreeMap<>();
+        s3Client.listObjectsV2Paginator(ListObjectsV2Request.builder().bucket(BUCKET).build())
+                .contents()
+                .forEach(object -> {
+                    Matcher matcher = snapshotFile.matcher(object.key());
+                    if (matcher.find()) {
+                        snapshots.computeIfAbsent(matcher.group(1), name -> new TreeMap<>())
+                                .put(matcher.group(2), object);
+                    }
+                });
+        return snapshots;
+    }
+
+    private byte[] content(S3Object object) {
+        return s3Client.getObjectAsBytes(GetObjectRequest.builder().bucket(BUCKET).key(object.key()).build())
+                .asByteArray();
+    }
+
+    private long numberOfDocuments() {
+        Number numFound = given().spec(spec).params(nodeDocumentsQuery()).param("rows", "0").param("wt", "json")
+                .when().get("select").then().statusCode(200).extract().path("response.numFound");
+        return numFound.longValue();
+    }
+
+    private List<String> documentIds(int count) {
+        return given().spec(spec).params(nodeDocumentsQuery()).param("rows", count).param("fl", "id").param("wt", "json")
+                .when().get("select").then().statusCode(200).extract().path("response.docs.id");
+    }
+
+    /**
+     * Matches the documents of repository nodes. The default query parser of the alfresco core does not support
+     * "*:*", and the tracker state documents must not be deleted.
+     */
+    private static Map<String, String> nodeDocumentsQuery() {
+        return Map.of("q", "*:*", "defType", "lucene", "fq", "DOC_TYPE:Node");
+    }
+
+    private void deleteDocumentAndCommit(String id) {
+        given().spec(spec).queryParam("commit", "true").contentType("text/xml")
+                .body("<delete><id>" + id.replace("&", "&amp;").replace("<", "&lt;") + "</id></delete>")
+                .when().post("update").then().statusCode(200);
+    }
 
     void validateSnapshotCount(long count) {
         await().atMost(180, TimeUnit.SECONDS)

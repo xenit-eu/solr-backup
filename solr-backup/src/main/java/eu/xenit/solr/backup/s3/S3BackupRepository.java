@@ -21,11 +21,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.CorruptIndexException;
@@ -53,10 +56,26 @@ public class S3BackupRepository implements BackupRepository {
   private static final int CHUNK_SIZE = 16 * 1024 * 1024; // 16 MBs
   static final String S3_SCHEME = "s3";
 
+  // Directory name of a snapshot created by Solr without an explicit name: snapshot.<yyyyMMddHHmmssSSS>
+  private static final Pattern TIMESTAMPED_SNAPSHOT = Pattern.compile("snapshot\\.\\d{17}");
+
+  // A single S3 copy request supports objects up to 5 GB, larger files are uploaded instead
+  static final long MAX_SINGLE_COPY_SIZE = 5L * 1024 * 1024 * 1024;
+
   private NamedList<?> config;
+
+  private boolean incrementalEnabled;
+
+  // Files of the latest snapshot preceding the snapshot currently being written, resolved once per snapshot
+  private String previousSnapshotFor;
+  private PreviousSnapshot previousSnapshot;
 
   public void setClient(S3StorageClient client) {
     this.client = client;
+  }
+
+  void setIncrementalEnabled(boolean incrementalEnabled) {
+    this.incrementalEnabled = incrementalEnabled;
   }
 
   private S3StorageClient client;
@@ -65,6 +84,7 @@ public class S3BackupRepository implements BackupRepository {
   public void init(NamedList args) {
     this.config = args;
     S3BackupRepositoryConfig backupConfig = new S3BackupRepositoryConfig(this.config);
+    this.incrementalEnabled = backupConfig.isIncrementalEnabled();
 
       // If a client was already created, close it to avoid any resource leak
     if (client != null) {
@@ -309,6 +329,12 @@ public class S3BackupRepository implements BackupRepository {
     URI filePath = resolve(dest, destFileName);
     String s3Path = getS3Path(filePath);
     Instant start = Instant.now();
+
+    if (incrementalEnabled
+        && tryCopyFromPreviousSnapshot(sourceDir, sourceFileName, dest, destFileName, s3Path)) {
+      return;
+    }
+
     if (log.isDebugEnabled()) {
       log.debug("Upload started to S3 '{}'", s3Path);
     }
@@ -341,6 +367,153 @@ public class S3BackupRepository implements BackupRepository {
     long timeElapsed = Duration.between(start, Instant.now()).toMillis();
     if (log.isInfoEnabled()) {
       log.info("Upload to S3: '{}' finished in {}ms", s3Path, timeElapsed);
+    }
+  }
+
+  /**
+   * Try to create the destination file with a server-side copy of the identical file in the latest previous
+   * snapshot. A file is identical when its name, length and the checksum recorded in its Lucene footer match.
+   * The footer of the local file is read without reading the rest of the file, the footer of the stored file
+   * is fetched with a ranged GET.
+   *
+   * <p>Never throws: when the file cannot be reused, this returns false and the caller uploads the file as
+   * usual (overwriting any incomplete destination object). Files that simply differ from, or are missing in,
+   * the previous snapshot don't affect the other files. An unexpected storage failure stops further reuse
+   * attempts for the rest of the snapshot, so that a backend or permission problem doesn't cost extra failing
+   * requests and log entries for every file.
+   *
+   * @return true if the file was copied, false if it still needs to be uploaded
+   */
+  private boolean tryCopyFromPreviousSnapshot(
+      Directory sourceDir, String sourceFileName, URI dest, String destFileName, String destS3Path) {
+    PreviousSnapshot previous = getPreviousSnapshot(getS3Path(dest));
+    if (previous == null || previous.reuseDisabled) {
+      return false;
+    }
+
+    Long storedLength = previous.files.get(destFileName);
+    if (storedLength == null
+        || storedLength <= CodecUtil.footerLength()
+        || storedLength > MAX_SINGLE_COPY_SIZE) {
+      return false;
+    }
+
+    long localChecksum;
+    try {
+      if (storedLength != sourceDir.fileLength(sourceFileName)) {
+        return false;
+      }
+      try (IndexInput indexInput =
+          sourceDir.openInput(sourceFileName, DirectoryFactory.IOCONTEXT_NO_CACHE)) {
+        localChecksum = CodecUtil.retrieveChecksum(indexInput);
+      }
+    } catch (IOException e) {
+      // Not a storage problem: the upload will report it if the local file really is unusable
+      log.warn("Could not read the checksum of '{}', uploading it instead: {}", sourceFileName, e.toString());
+      return false;
+    }
+
+    String previousPath = previous.path + destFileName;
+    try {
+      byte[] footer =
+          client.readRange(previousPath, storedLength - CodecUtil.footerLength(), storedLength - 1);
+      Long storedChecksum = parseFooterChecksum(footer);
+      if (storedChecksum == null || storedChecksum != localChecksum) {
+        return false;
+      }
+
+      Instant start = Instant.now();
+      client.createDirectory(getS3Path(dest));
+      client.copy(previousPath, destS3Path);
+      if (log.isDebugEnabled()) {
+        log.debug(
+            "Unchanged file copied in S3 from '{}' to '{}' in {}ms",
+            previousPath,
+            destS3Path,
+            Duration.between(start, Instant.now()).toMillis());
+      }
+      return true;
+    } catch (S3NotFoundException e) {
+      // The file was removed from the previous snapshot after it was listed, which only affects this file
+      log.debug("'{}' no longer exists in the previous snapshot, uploading it instead", previousPath);
+      return false;
+    } catch (Exception e) {
+      previous.reuseDisabled = true;
+      log.warn(
+          "Could not reuse files of the previous snapshot, uploading '{}' and the remaining files of this snapshot instead: {}",
+          destS3Path,
+          e.toString());
+      return false;
+    }
+  }
+
+  /**
+   * Get the files of the latest snapshot preceding the snapshot at {@code destS3Path}, or null if there is none
+   * or it can't be listed. Resolved on the first file of a snapshot and reused for the others.
+   */
+  private synchronized PreviousSnapshot getPreviousSnapshot(String destS3Path) {
+    if (!destS3Path.equals(previousSnapshotFor)) {
+      previousSnapshotFor = destS3Path;
+      try {
+        previousSnapshot = findPreviousSnapshot(destS3Path);
+      } catch (Exception e) {
+        log.warn("Could not find a previous snapshot to reuse files from, uploading all files", e);
+        previousSnapshot = null;
+      }
+    }
+    return previousSnapshot;
+  }
+
+  private PreviousSnapshot findPreviousSnapshot(String destS3Path) throws IOException {
+    String snapshotDir =
+        destS3Path.endsWith("/") ? destS3Path.substring(0, destS3Path.length() - 1) : destS3Path;
+    int lastSlash = snapshotDir.lastIndexOf('/');
+    String basePath = snapshotDir.substring(0, lastSlash + 1);
+    String currentName = snapshotDir.substring(lastSlash + 1);
+    boolean currentIsTimestamped = TIMESTAMPED_SNAPSHOT.matcher(currentName).matches();
+
+    // Timestamps have a fixed width, so the lexicographically greatest name is the latest snapshot.
+    // A snapshot that is not older than the one being written can't be a previous one.
+    String latest = null;
+    for (String name : client.listDir(basePath)) {
+      if (TIMESTAMPED_SNAPSHOT.matcher(name).matches()
+          && (!currentIsTimestamped || name.compareTo(currentName) < 0)
+          && (latest == null || name.compareTo(latest) > 0)) {
+        latest = name;
+      }
+    }
+    if (latest == null) {
+      return null;
+    }
+
+    String previousPath = basePath + latest + "/";
+    return new PreviousSnapshot(previousPath, client.listFileSizes(previousPath));
+  }
+
+  /** Returns the checksum recorded in a 16 byte Lucene footer, or null if it isn't a valid footer. */
+  static Long parseFooterChecksum(byte[] footer) {
+    if (footer == null || footer.length != CodecUtil.footerLength()) {
+      return null;
+    }
+    ByteBuffer buffer = ByteBuffer.wrap(footer); // big-endian, as written by Lucene
+    int magic = buffer.getInt();
+    int algorithmId = buffer.getInt();
+    long checksum = buffer.getLong();
+    if (magic != CodecUtil.FOOTER_MAGIC || algorithmId != 0 || (checksum & 0xFFFFFFFF00000000L) != 0) {
+      return null;
+    }
+    return checksum;
+  }
+
+  private static class PreviousSnapshot {
+    final String path;
+    final Map<String, Long> files;
+    // Set after an unexpected storage failure, files of the current snapshot are then uploaded without trying to reuse
+    volatile boolean reuseDisabled;
+
+    PreviousSnapshot(String path, Map<String, Long> files) {
+      this.path = path;
+      this.files = files;
     }
   }
 
