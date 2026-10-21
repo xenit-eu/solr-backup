@@ -59,14 +59,13 @@ public class S3BackupRepository implements BackupRepository {
   // Directory name of a snapshot created by Solr without an explicit name: snapshot.<yyyyMMddHHmmssSSS>
   private static final Pattern TIMESTAMPED_SNAPSHOT = Pattern.compile("snapshot\\.\\d{17}");
 
-  // A single S3 copy request supports objects up to 5 GB, larger files are uploaded instead
-  static final long MAX_SINGLE_COPY_SIZE = 5L * 1024 * 1024 * 1024;
-
   private NamedList<?> config;
 
   private boolean incrementalEnabled;
 
-  // Files of the latest snapshot preceding the snapshot currently being written, resolved once per snapshot
+  // Resolved lazily on the first file copied because BackupRepository has no snapshot-start callback.
+  // Solr 6.6.5 creates a repository instance per backup and copies its files on one thread,
+  // so synchronisation is unnecessary.
   private String previousSnapshotFor;
   private PreviousSnapshot previousSnapshot;
 
@@ -371,18 +370,14 @@ public class S3BackupRepository implements BackupRepository {
   }
 
   /**
-   * Try to create the destination file with a server-side copy of the identical file in the latest previous
-   * snapshot. A file is identical when its name, length and the checksum recorded in its Lucene footer match.
-   * The footer of the local file is read without reading the rest of the file, the footer of the stored file
-   * is fetched with a ranged GET.
+   * Attempts to reuse a matching file from the latest previous snapshot via server-side copy.
+   * Matching requires the same name, length and recorded Lucene footer checksum.
    *
-   * <p>Never throws: when the file cannot be reused, this returns false and the caller uploads the file as
-   * usual (overwriting any incomplete destination object). Files that simply differ from, or are missing in,
-   * the previous snapshot don't affect the other files. An unexpected storage failure stops further reuse
-   * attempts for the rest of the snapshot, so that a backend or permission problem doesn't cost extra failing
-   * requests and log entries for every file.
+   * <p>If reuse isn't possible, returns {@code false} so the caller uploads the file normally.
+   * A missing or mismatched file only affects that file; an unexpected storage failure disables
+   * reuse for the rest of the snapshot.
    *
-   * @return true if the file was copied, false if it still needs to be uploaded
+   * @return {@code true} if copied, {@code false} if the file should be uploaded.
    */
   private boolean tryCopyFromPreviousSnapshot(
       Directory sourceDir, String sourceFileName, URI dest, String destFileName, String destS3Path) {
@@ -394,7 +389,7 @@ public class S3BackupRepository implements BackupRepository {
     Long storedLength = previous.files.get(destFileName);
     if (storedLength == null
         || storedLength <= CodecUtil.footerLength()
-        || storedLength > MAX_SINGLE_COPY_SIZE) {
+        || !S3StorageClient.canCopyObject(storedLength)) {
       return false;
     }
 
@@ -451,7 +446,7 @@ public class S3BackupRepository implements BackupRepository {
    * Get the files of the latest snapshot preceding the snapshot at {@code destS3Path}, or null if there is none
    * or it can't be listed. Resolved on the first file of a snapshot and reused for the others.
    */
-  private synchronized PreviousSnapshot getPreviousSnapshot(String destS3Path) {
+  private PreviousSnapshot getPreviousSnapshot(String destS3Path) {
     if (!destS3Path.equals(previousSnapshotFor)) {
       previousSnapshotFor = destS3Path;
       try {
@@ -490,7 +485,11 @@ public class S3BackupRepository implements BackupRepository {
     return new PreviousSnapshot(previousPath, client.listFileSizes(previousPath));
   }
 
-  /** Returns the checksum recorded in a 16 byte Lucene footer, or null if it isn't a valid footer. */
+  /**
+   * Returns the CRC32 checksum from a valid 16-byte Lucene footer, or {@code null} if invalid.
+   * Validates the footer magic, algorithm ID (0 denotes CRC32 in Lucene 6.6.5), and that the checksum fits in 32 bits.
+   * Invalid footer data causes the file to be uploaded rather than reused.
+   */
   static Long parseFooterChecksum(byte[] footer) {
     if (footer == null || footer.length != CodecUtil.footerLength()) {
       return null;
@@ -509,7 +508,7 @@ public class S3BackupRepository implements BackupRepository {
     final String path;
     final Map<String, Long> files;
     // Set after an unexpected storage failure, files of the current snapshot are then uploaded without trying to reuse
-    volatile boolean reuseDisabled;
+    boolean reuseDisabled;
 
     PreviousSnapshot(String path, Map<String, Long> files) {
       this.path = path;

@@ -92,6 +92,9 @@ class S3StorageClient {
     // Error messages returned by S3 for a key not found.
     private static final Set<String> NOT_FOUND_CODES = Set.of("NoSuchKey", "404 Not Found");
 
+    // A single CopyObject request supports source objects of up to 5 GB
+    static final long MAX_SINGLE_COPY_SIZE = 5L * 1024 * 1024 * 1024;
+
     private final S3Client s3Client;
     private final S3BackupRepositoryConfig configuration;
 
@@ -329,9 +332,14 @@ class S3StorageClient {
         }
     }
 
+    /** Whether {@link #copy} can copy an object of this size. Larger objects have to be uploaded instead. */
+    static boolean canCopyObject(long size) {
+        return size <= MAX_SINGLE_COPY_SIZE;
+    }
+
     /**
-     * Copy a file to another key in the same bucket, server-side. An existing object at the destination is
-     * overwritten. A single copy request supports objects of up to 5 GB, larger objects are not supported.
+     * Copy a file to another key in the same bucket, server-side, with a single CopyObject request (so only for
+     * sizes accepted by {@link #canCopyObject}). An existing object at the destination is overwritten.
      *
      * @param sourcePath      path of the existing file in S3.
      * @param destinationPath path of the file to create in S3.

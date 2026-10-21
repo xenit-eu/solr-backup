@@ -26,7 +26,12 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -160,23 +165,19 @@ class SolrBackupTest {
 
 
     /**
-     * Requires S3_INCREMENTAL_ENABLED=true on the solr container (see docker-compose.yml).
-     * <p>
-     * Takes a backup, deletes a document and takes a second backup, so that only some of the index files changed.
-     * Then checks that the unchanged files of the second snapshot were copied server-side from the first one and
-     * that only the changed files were uploaded, and that restoring the second snapshot gives back its index.
-     * <p>
-     * Copied files are recognised by their ETag: S3OutputStream uploads files as multipart uploads, which have an
-     * ETag ending in "-<number of parts>", while an object created by a copy has a plain MD5 ETag.
-     * <p>
-     * This distinction relies on LocalStack's behaviour, which was checked manually for the LocalStack version used
-     * here (2.3.2) and for 4.8.0. It has not been verified against AWS S3 or the configuration of the target AWS
-     * deployment (for example SSE-KMS, where the ETag of an object is not an MD5 digest). Check that before relying
-     * on this ETag check, or on the copy itself, outside of LocalStack.
+     * Requires {@code S3_INCREMENTAL_ENABLED=true} for the Solr container (see
+     * {@code integration-tests/src/test/resources/compose/docker-compose.yml}).
+     *
+     * <p>Creates two backups with overlapping index files, verifies that unchanged files are copied
+     * server-side rather than uploaded again, and restores the second snapshot.
+     *
+     * <p>This test uses LocalStack's ETag behaviour to distinguish copied files from multipart
+     * uploads. This assertion is specific to LocalStack; production reuse relies on Lucene footer
+     * checksums, not ETags.
      */
     @Test
     @Order(3)
-    void testIncrementalBackupReusesUnchangedFilesAndRestores() throws InterruptedException {
+    void testIncrementalBackupReusesUnchangedFilesAndRestores() {
         backupAndWaitForNewSnapshot();
         long totalDocs = numberOfDocuments();
         List<String> ids = documentIds(2);
@@ -231,10 +232,10 @@ class SolrBackupTest {
     /**
      * Triggers a backup and waits until it completed, returning the name of the snapshot it created.
      */
-    private String backupAndWaitForNewSnapshot() throws InterruptedException {
+    private String backupAndWaitForNewSnapshot() {
         String latestBefore = latestSnapshot();
         String completedBefore = backupCompletedAt();
-        sleep(2000); // The completion time has a resolution of a second
+        awaitNextSecondAfter(completedBefore);
         assertEquals("OK", given().spec(specBackup).when().get().then().statusCode(200).extract().path("status"));
         await().atMost(180, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
@@ -244,6 +245,23 @@ class SolrBackupTest {
                             && !String.valueOf(latestSnapshot()).equals(String.valueOf(latestBefore));
                 });
         return latestSnapshot();
+    }
+
+    /**
+     * The completion time of a backup has a resolution of a second: wait until the clock is past the previous one,
+     * so that the next backup can't get the same completion time and be mistaken for the previous backup.
+     */
+    private void awaitNextSecondAfter(String completedAt) {
+        if (completedAt == null) {
+            return;
+        }
+        // Solr formats the time with Date#toString, and runs in a container with the clock of this machine
+        Instant nextSecond = ZonedDateTime
+                .parse(completedAt, DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH))
+                .toInstant().truncatedTo(ChronoUnit.SECONDS).plusSeconds(1);
+        await().atMost(10, TimeUnit.SECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .until(() -> !Instant.now().isBefore(nextSecond));
     }
 
     private String backupCompletedAt() {

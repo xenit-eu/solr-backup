@@ -320,7 +320,7 @@ class S3BackupRepositoryIncrementalTest {
     void fileTooLargeForASingleCopyIsUploaded() throws IOException {
         byte[] file = writeLuceneFile(FILE, 100);
         // Report the local file, and the stored one, as larger than a single copy request supports
-        long hugeLength = S3BackupRepository.MAX_SINGLE_COPY_SIZE + 1;
+        long hugeLength = S3StorageClient.MAX_SINGLE_COPY_SIZE + 1;
         Directory huge = new FilterDirectory(directory) {
             @Override
             public long fileLength(String name) throws IOException {
@@ -368,8 +368,11 @@ class S3BackupRepositoryIncrementalTest {
         badAlgorithm[7] = 1;
         assertNull(S3BackupRepository.parseFooterChecksum(badAlgorithm));
         byte[] badChecksum = footer.clone();
-        badChecksum[8] = 1; // upper 32 bits of the CRC must be zero
+        badChecksum[8] = 1; // Upper 32 bits of the CRC must be zero
         assertNull(S3BackupRepository.parseFooterChecksum(badChecksum));
+        byte[] badMagic = footer.clone();
+        badMagic[0] ^= 1; // Flip one bit of the footer magic
+        assertNull(S3BackupRepository.parseFooterChecksum(badMagic));
     }
 
     private void expectUpload() throws IOException {

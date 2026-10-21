@@ -76,11 +76,11 @@ Every snapshot remains a complete, self-contained set of index files, so restore
 behave as before.
 
 A file is reused when its name, length and the checksum recorded in its Lucene footer match those of the file in the
-previous snapshot. The stored checksum is read with a ranged GET of the last 16 bytes of the object. Reused files are
-not read or validated locally again. Files that differ from, or are missing in, the previous snapshot are uploaded as
-usual, as are files larger than 5 GB. If a request for reusing a file fails unexpectedly (for example because of
-missing permissions or because the storage doesn't support it), a warning is logged once and the remaining files of
-that snapshot are uploaded without trying to reuse them. The backup itself is not affected.
+previous snapshot. Reused files are not read or validated locally again. Files that differ from, or are missing in,
+the previous snapshot are uploaded as usual, as are files larger than 5 GB (the limit of a single `CopyObject`
+request). If a request for reusing a file fails unexpectedly (for example because of missing permissions or because
+the storage doesn't support it), a warning is logged once and the remaining files of that snapshot are uploaded
+without trying to reuse them. The backup itself is not affected.
 
 The target storage must support server-side copy (`CopyObject`) and ranged GET requests. This is expected for AWS S3,
 but should be verified before enabling it on any other S3-compatible storage. Measure the backup duration with and

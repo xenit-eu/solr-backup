@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -97,6 +98,14 @@ class S3StorageClientTest {
     }
 
     @Test
+    void objectsUpToFiveGigabytesCanBeCopied() {
+        long fiveGigabytes = 5L * 1024 * 1024 * 1024;
+        assertTrue(S3StorageClient.canCopyObject(0));
+        assertTrue(S3StorageClient.canCopyObject(fiveGigabytes));
+        assertFalse(S3StorageClient.canCopyObject(fiveGigabytes + 1));
+    }
+
+    @Test
     void copyOfMissingObjectIsNotFound() {
         when(s3Client.copyObject(any(CopyObjectRequest.class))).thenThrow(serviceException(NoSuchKeyException.builder(), 404, "NoSuchKey"));
 
@@ -144,7 +153,7 @@ class S3StorageClientTest {
     }
 
     private static AwsServiceException serviceException(AwsServiceException.Builder builder, int status, String errorCode) {
-        return (AwsServiceException) builder
+        return builder
                 .statusCode(status)
                 .awsErrorDetails(AwsErrorDetails.builder()
                         .serviceName("S3")
