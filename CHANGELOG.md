@@ -2,6 +2,11 @@
 title: Changelog - Solr Backup
 
 # Alfresco Backup Changelog
+## Unreleased
+
+* XEN-3154 optional incremental backups: unchanged files are copied server-side from the latest previous snapshot
+  instead of being uploaded again (`s3.incremental.enabled` / `S3_INCREMENTAL_ENABLED`, disabled by default)
+
 ## v0.0.11 - 15-04-2024
 
 * DOCKER-449 reduce the logging level for check on is directory

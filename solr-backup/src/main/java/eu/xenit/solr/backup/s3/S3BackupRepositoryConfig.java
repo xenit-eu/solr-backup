@@ -38,6 +38,7 @@ public class S3BackupRepositoryConfig {
     public static final String S3_PROXY_HOST = "s3.proxy.host";
     public static final String S3_PROXY_PORT = "s3.proxy.port";
     public static final String S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL = "s3.client.progressLogByteInterval";
+    public static final String S3_INCREMENTAL_ENABLED = "s3.incremental.enabled";
 
     private final String bucketName;
 
@@ -59,6 +60,12 @@ public class S3BackupRepositoryConfig {
 
     private final int progressLogByteInterval;
 
+    /**
+     * When enabled, files unchanged since the latest previous snapshot are copied server-side instead of being
+     * uploaded again. Disabled unless explicitly set to 'true'.
+     */
+    private final boolean incrementalEnabled;
+
 
     public S3BackupRepositoryConfig(NamedList<?> config) {
         region = getStringConfig(config, S3_REGION);
@@ -71,6 +78,7 @@ public class S3BackupRepositoryConfig {
         pathStyleAccessEnabled = getBooleanConfig(config, S3_PATH_STYLE_ACCESS_ENABLED);
         checksumValidationEnabled = getBooleanConfig(config, S3_CLIENT_CHECKSUM_VALIDATION_ENABLED);
         progressLogByteInterval = getIntConfig(config, S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL);
+        incrementalEnabled = getBooleanConfig(config, S3_INCREMENTAL_ENABLED);
     }
 
     /**
