@@ -12,6 +12,7 @@
             <int name="s3.proxy.port">${S3_PROXY_PORT:0}</int>
 
             <bool name="s3.path.style.access.enabled">${S3_PATH_STYLE_ACCESS_ENABLED:false}</bool>
+            <bool name="s3.incremental.enabled">${S3_INCREMENTAL_ENABLED:false}</bool>
             <bool name="s3.client.checksumValidationEnabled">${S3_CLIENT_CHECKSUM_VALIDATION_ENABLED:true}</bool>
             <int name="s3.client.progressLogByteInterval">${S3_CLIENT_PROGRESS_LOG_BYTE_INTERVAL:4194304}</int>
         </repository>

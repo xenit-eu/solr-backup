@@ -42,6 +42,7 @@ you need to put the solr.xml file under /opt/alfresco-search-services/solrhome/
             <str name="s3.proxy.host">${S3_PROXY_HOST:}</str>
             <int name="s3.proxy.port">${S3_PROXY_PORT:0}</int>
             <bool name="s3.path.style.access.enabled">${S3_PATH_STYLE_ACCESS_ENABLED:false}</bool>
+            <bool name="s3.incremental.enabled">${S3_INCREMENTAL_ENABLED:false}</bool>
         </repository>
     </backup>
 </solr>
@@ -63,6 +64,42 @@ all of these variable can be set as environment variable or as a system property
 | S3_PROXY_HOST                | -DS3_PROXY_HOST                |                                      | false    |
 | S3_PROXY_PORT                | -DS3_PROXY_PORT                |                                      | false    |
 | S3_PATH_STYLE_ACCESS_ENABLED | -DS3_PATH_STYLE_ACCESS_ENABLED | false                                | false    |
+| S3_INCREMENTAL_ENABLED       | -DS3_INCREMENTAL_ENABLED       | false                                | false    |
+
+## Incremental backups (optional)
+
+By default every backup uploads every file of the index. When `s3.incremental.enabled` is `true`
+(`S3_INCREMENTAL_ENABLED`), files that are unchanged since the latest previous `snapshot.<timestamp>` are copied
+server-side within the bucket instead of being uploaded again. This is intended to reduce the backup duration, but
+the improvement has not been measured yet and depends on the storage backend and the index.
+Every snapshot remains a complete, self-contained set of index files, so restore and `numberToKeep`
+behave as before.
+
+A file is reused when its name, length and the checksum recorded in its Lucene footer match those of the file in the
+previous snapshot. Reused files are not read or validated locally again. Files that differ from, or are missing in,
+the previous snapshot are uploaded as usual, as are files larger than 5 GB (the limit of a single `CopyObject`
+request). If a request for reusing a file fails unexpectedly (for example because of missing permissions or because
+the storage doesn't support it), a warning is logged once and the remaining files of that snapshot are uploaded
+without trying to reuse them. The backup itself is not affected.
+
+The target storage must support server-side copy (`CopyObject`) and ranged GET requests. This is expected for AWS S3,
+but should be verified before enabling it on any other S3-compatible storage. Measure the backup duration with and
+without the option on your own data before relying on it.
+
+### Required permissions
+
+Besides the permissions needed for ordinary backups (listing the bucket, and reading, writing and deleting objects),
+reusing files needs:
+
+* `s3:GetObject` on the previous snapshot, to read the last 16 bytes of its files and to use them as the source of
+  the copy;
+* `s3:PutObject` on the new snapshot, for the copy itself.
+
+If the bucket uses SSE-KMS encryption, the copy also needs `kms:Decrypt` on the key of the previous snapshot's objects
+and `kms:GenerateDataKey` on the key used for the new objects. No encryption settings are specified for the copy, so
+the new objects get the default encryption of the bucket, like uploaded files. If the keys differ, permissions on both
+are needed. These requirements are based on the AWS documentation. SSE-KMS and the permission setup are not covered by
+this project's tests, so verify them on your own configuration.
 
 ## Testing against DataCore Swarm docker
 

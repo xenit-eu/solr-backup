@@ -18,13 +18,11 @@ package eu.xenit.solr.backup.s3;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
-import org.apache.commons.io.input.ClosedInputStream;
 import org.apache.solr.common.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
@@ -37,6 +35,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.CommonPrefix;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
@@ -46,8 +45,6 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
-import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
-import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
@@ -55,6 +52,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -64,8 +62,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -91,6 +91,9 @@ class S3StorageClient {
 
     // Error messages returned by S3 for a key not found.
     private static final Set<String> NOT_FOUND_CODES = Set.of("NoSuchKey", "404 Not Found");
+
+    // A single CopyObject request supports source objects of up to 5 GB
+    static final long MAX_SINGLE_COPY_SIZE = 5L * 1024 * 1024 * 1024;
 
     private final S3Client s3Client;
     private final S3BackupRepositoryConfig configuration;
@@ -263,6 +266,95 @@ class S3StorageClient {
             });
 
             return entries.toArray(new String[0]);
+        } catch (SdkException ase) {
+            throw handleAmazonException(ase);
+        }
+    }
+
+    /**
+     * List the files directly under the given path, together with their size in bytes.
+     * Sub-directories and directory markers are not included.
+     *
+     * @param path Path to directory in S3.
+     * @return File name (relative to path) mapped to its size in bytes.
+     */
+    Map<String, Long> listFileSizes(String path) throws S3Exception {
+        String dirPath = sanitizedDirPath(path);
+        String prefix = dirPath.equals("/") ? "" : dirPath;
+
+        ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
+                .bucket(this.configuration.getBucketName())
+                .prefix(prefix)
+                .delimiter(S3_FILE_PATH_DELIMITER)
+                .build();
+
+        Map<String, Long> files = new LinkedHashMap<>();
+        try {
+            s3Client.listObjectsV2Paginator(listRequest).forEach(page -> {
+                for (S3Object object : page.contents()) {
+                    if (!object.key().startsWith(prefix)) {
+                        continue;
+                    }
+                    String name = object.key().substring(prefix.length());
+                    if (!name.isEmpty() && !name.contains(S3_FILE_PATH_DELIMITER)) {
+                        files.put(name, object.size());
+                    }
+                }
+            });
+            return files;
+        } catch (SdkException ase) {
+            throw handleAmazonException(ase);
+        }
+    }
+
+    /**
+     * Read a byte range of a file with a ranged GET.
+     *
+     * @param path  to file in S3.
+     * @param start first byte to read (inclusive).
+     * @param end   last byte to read (inclusive).
+     * @return the bytes read.
+     */
+    byte[] readRange(String path, long start, long end) throws S3Exception {
+        path = sanitizedFilePath(path);
+
+        GetObjectRequest request = GetObjectRequest.builder()
+                .bucket(this.configuration.getBucketName())
+                .key(path)
+                .range("bytes=" + start + "-" + end)
+                .build();
+        try (ResponseInputStream<GetObjectResponse> object = s3Client.getObject(request)) {
+            return object.readAllBytes();
+        } catch (SdkException ase) {
+            throw handleAmazonException(ase);
+        } catch (IOException e) {
+            throw new S3Exception("Could not read range of object with key: " + path, e);
+        }
+    }
+
+    /** Whether {@link #copy} can copy an object of this size. Larger objects have to be uploaded instead. */
+    static boolean canCopyObject(long size) {
+        return size <= MAX_SINGLE_COPY_SIZE;
+    }
+
+    /**
+     * Copy a file to another key in the same bucket, server-side, with a single CopyObject request (so only for
+     * sizes accepted by {@link #canCopyObject}). An existing object at the destination is overwritten.
+     *
+     * @param sourcePath      path of the existing file in S3.
+     * @param destinationPath path of the file to create in S3.
+     */
+    void copy(String sourcePath, String destinationPath) throws S3Exception {
+        String sourceKey = sanitizedFilePath(sourcePath);
+        String destinationKey = sanitizedFilePath(destinationPath);
+
+        try {
+            s3Client.copyObject(CopyObjectRequest.builder()
+                    .sourceBucket(this.configuration.getBucketName())
+                    .sourceKey(sourceKey)
+                    .destinationBucket(this.configuration.getBucketName())
+                    .destinationKey(destinationKey)
+                    .build());
         } catch (SdkException ase) {
             throw handleAmazonException(ase);
         }
