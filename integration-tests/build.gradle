@@ -61,4 +61,6 @@ dockerCompose {
             "${project.projectDir}/src/test/resources/compose/docker-compose.yml"
     ]
         isRequiredBy(project.tasks.test)
+    // Container logs (e.g. of Solr) are removed with the containers. Under build/reports so that CI uploads them.
+    captureContainersOutputToFiles = layout.buildDirectory.dir("reports/containers").get().asFile
 }
