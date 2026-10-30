@@ -43,7 +43,6 @@ import java.util.regex.Pattern;
 import static io.restassured.RestAssured.given;
 import static java.lang.Thread.sleep;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -170,12 +169,18 @@ class SolrBackupTest {
      * Requires {@code S3_INCREMENTAL_ENABLED=true} for the Solr container (see
      * {@code integration-tests/src/test/resources/compose/docker-compose.yml}).
      *
-     * <p>Creates two backups of an index with overlapping files and verifies that the second
-     * snapshot can be restored. Exercises the incremental backup workflow through Solr.
+     * <p>Creates two backups of an index with overlapping files, verifies that files with identical content were
+     * copied server-side and the others uploaded, and that the second snapshot can be restored. The restore is
+     * verified even if the files were not reused as expected, and all differences are reported at once.
+     *
+     * <p>Copy and upload are distinguished using LocalStack 2.3.2's ETag behaviour:
+     * multipart uploads have an ETag ending in a part count, while CopyObject
+     * produces a plain MD5 ETag. This is specific to this integration test;
+     * production reuse relies on Lucene footer checksums, not ETags.
      */
     @Test
     @Order(3)
-    void testIncrementalBackupCreatesRestorableSnapshot() {
+    void testIncrementalBackupReusesUnchangedFilesAndRestores() {
         backupAndWaitForNewSnapshot();
         long totalDocs = numberOfDocuments();
         List<String> ids = documentIds(2);
@@ -191,18 +196,37 @@ class SolrBackupTest {
         Map<String, S3Object> first = snapshots.get(names[names.length - 2]);
         Map<String, S3Object> second = snapshots.get(secondSnapshot);
 
-        // Files are only unchanged if their content is the same too, which is only fetched for files of equal size
-        List<String> unchanged = new ArrayList<>();
-        List<String> changed = new ArrayList<>();
+        // Files are only unchanged if their content is the same too, which is only fetched for files of equal size.
+        // Unchanged files must have been copied (plain ETag), all others uploaded (multipart ETag).
+        List<String> problems = new ArrayList<>();
+        int copied = 0;
+        int uploaded = 0;
         for (Map.Entry<String, S3Object> file : second.entrySet()) {
             S3Object previous = first.get(file.getKey());
-            boolean same = previous != null
+            boolean unchanged = previous != null
                     && previous.size().equals(file.getValue().size())
                     && Arrays.equals(content(previous), content(file.getValue()));
-            (same ? unchanged : changed).add(file.getKey());
+            boolean multipartUpload = file.getValue().eTag().contains("-");
+            if (multipartUpload) {
+                uploaded++;
+            } else {
+                copied++;
+            }
+            if (unchanged == multipartUpload) {
+                problems.add(file.getKey() + ": " + (unchanged ? "unchanged, expected copied but was uploaded"
+                        : "new or changed, expected uploaded but was copied")
+                        + " (size " + (previous == null ? "-" : previous.size()) + " -> " + file.getValue().size()
+                        + ", etag " + file.getValue().eTag() + ")");
+            }
         }
-        System.out.println("Second snapshot " + secondSnapshot + ": " + unchanged.size() + " files unchanged, "
-                + changed.size() + " new or changed");
+        System.out.println("Second snapshot " + secondSnapshot + ": " + copied + " files copied, " + uploaded
+                + " uploaded");
+        if (copied == 0) {
+            problems.add("No files were copied from the previous snapshot");
+        }
+        if (uploaded == 0) {
+            problems.add("No files were uploaded, so the deletion did not change the index files");
+        }
 
         // Change the index again, so that restoring the second snapshot visibly goes back to its state
         deleteDocumentAndCommit(ids.get(1));
@@ -220,13 +244,10 @@ class SolrBackupTest {
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(() -> numberOfDocuments() == totalDocs - 1);
 
-        // Checked last, so that the restore was verified even if the files of the snapshots are not as expected
-        assertAll(
-                () -> assertFalse(unchanged.isEmpty(), "The snapshots " + names[names.length - 2] + " and "
-                        + secondSnapshot + " have no unchanged files, so the second one could not reuse any. "
-                        + "Files of the second snapshot: " + second.keySet()),
-                () -> assertFalse(changed.isEmpty(), "All files of " + secondSnapshot + " are unchanged, so the "
-                        + "deletion did not change the index files"));
+        // Checked last, so that the restore was verified even if the files were not reused as expected
+        assertTrue(problems.isEmpty(), problems.size() + " problem(s) with the files of " + secondSnapshot
+                + " (" + second.size() + " files, previous snapshot " + names[names.length - 2] + " has "
+                + first.size() + "):\n" + String.join("\n", problems));
     }
 
     /**

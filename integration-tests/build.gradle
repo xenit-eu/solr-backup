@@ -51,7 +51,12 @@ createDockerFile {
 
     if (flavor == "solr6") {
         smartCopy "${project.projectDir}/src/test/resources/solr.xml", "/opt/alfresco-search-services/solrhome/solr.xml"
+        // The base image bundles an older (AWS SDK 1.x) solr-backup.jar with the same classes as the jar built here,
+        // and Solr loads whichever of the two the filesystem lists first. Only that jar is removed, not the SDK 1.x jars.
+        runCommand "rm -f /opt/alfresco-search-services/solrhome/lib/solr-backup.jar"
         smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
+        // Fail the image build unless exactly one jar provides the repository class
+        runCommand '''n=$(for j in /opt/alfresco-search-services/solrhome/lib/*.jar; do unzip -Z1 "$j" | grep -Fxq 'eu/xenit/solr/backup/s3/S3BackupRepository.class' && echo "$j"; done | wc -l); [ "$n" -eq 1 ] || { echo "Expected exactly one jar in solrhome/lib with S3BackupRepository, found $n" >&2; exit 1; }'''
     }
 }
 
