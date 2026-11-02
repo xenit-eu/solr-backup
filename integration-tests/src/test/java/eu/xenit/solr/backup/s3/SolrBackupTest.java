@@ -196,8 +196,7 @@ class SolrBackupTest {
         Map<String, S3Object> first = snapshots.get(names[names.length - 2]);
         Map<String, S3Object> second = snapshots.get(secondSnapshot);
 
-        // Files are only unchanged if their content is the same too, which is only fetched for files of equal size.
-        // Unchanged files must have been copied (plain ETag), all others uploaded (multipart ETag).
+        // Files are only unchanged if their content is the same too, which is only fetched for files of equal size
         List<String> problems = new ArrayList<>();
         int copied = 0;
         int uploaded = 0;
@@ -206,15 +205,18 @@ class SolrBackupTest {
             boolean unchanged = previous != null
                     && previous.size().equals(file.getValue().size())
                     && Arrays.equals(content(previous), content(file.getValue()));
-            boolean multipartUpload = file.getValue().eTag().contains("-");
-            if (multipartUpload) {
-                uploaded++;
-            } else {
+            // The ETag of a multipart upload ends in "-<number of parts>", that of a copy does not (see above)
+            boolean wasCopied = !file.getValue().eTag().contains("-");
+            if (wasCopied) {
                 copied++;
+            } else {
+                uploaded++;
             }
-            if (unchanged == multipartUpload) {
-                problems.add(file.getKey() + ": " + (unchanged ? "unchanged, expected copied but was uploaded"
-                        : "new or changed, expected uploaded but was copied")
+            // Unchanged files must have been copied, new or changed files uploaded
+            if (unchanged != wasCopied) {
+                problems.add(file.getKey() + ": expected "
+                        + (unchanged ? "copied, as the content is unchanged" : "uploaded, as it is new or changed")
+                        + " but was " + (wasCopied ? "copied" : "uploaded")
                         + " (size " + (previous == null ? "-" : previous.size()) + " -> " + file.getValue().size()
                         + ", etag " + file.getValue().eTag() + ")");
             }

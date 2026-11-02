@@ -55,8 +55,13 @@ createDockerFile {
         // and Solr loads whichever of the two the filesystem lists first. Only that jar is removed, not the SDK 1.x jars.
         runCommand "rm -f /opt/alfresco-search-services/solrhome/lib/solr-backup.jar"
         smartCopy configurations.backupJar, "/opt/alfresco-search-services/solrhome/lib/"
-        // Fail the image build unless exactly one jar provides the repository class
-        runCommand '''n=$(for j in /opt/alfresco-search-services/solrhome/lib/*.jar; do unzip -Z1 "$j" | grep -Fxq 'eu/xenit/solr/backup/s3/S3BackupRepository.class' && echo "$j"; done | wc -l); [ "$n" -eq 1 ] || { echo "Expected exactly one jar in solrhome/lib with S3BackupRepository, found $n" >&2; exit 1; }'''
+        // Fail the image build unless exactly one jar in solrhome/lib provides the repository class.
+        runCommand '''\
+        jars=$(for j in /opt/alfresco-search-services/solrhome/lib/*.jar; do \\
+            unzip -Z1 "$j" | grep -Fxq 'eu/xenit/solr/backup/s3/S3BackupRepository.class' && echo "$j"; \\
+        done); \\
+        n=$(echo "$jars" | grep -c .); \\
+        [ "$n" -eq 1 ] || { echo "Expected exactly one jar in solrhome/lib with S3BackupRepository, found $n: $(echo $jars)" >&2; exit 1; }'''.stripIndent()
     }
 }
 
